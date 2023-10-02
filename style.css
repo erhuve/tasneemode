@@ -1,0 +1,44 @@
+body {
+  margin: 0;
+}
+
+.header {
+    padding-left: 20px;
+    padding-top: 1px;
+    padding-bottom: 1px;
+    text-align: left;
+    background: #f88639;
+    color: white;
+    font-size: 24px;
+    width: 100%;
+    border: 0;
+  }
+
+.name {
+  padding-left: 20px;
+  font-family: 'Open Sans';
+}
+
+.profile-pic {
+  max-width: 500px;
+}
+
+.center { 
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 50%;
+}
+
+.text-center {
+  text-align: center;
+  font-family: 'Open Sans';
+}
+
+p {
+  font-family: 'Open Sans';
+}
+
+.bold {
+  font-weight: bold;
+}

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Tasneemode</title>
+    <link
+      href="https://fonts.googleapis.com/css?family=Open Sans"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="hearts.css" />
+    <link rel="stylesheet" href="morph.css" />
+  </head>
+  <body>
+    <div class="header">
+      <h3>Tasneemode</h3>
+      <div class="topnav">
+        <a href="index.html">Home</a>
+        <a class="active" href="birthday.html">Birthday</a>
+      </div>
+    </div>
+
+    <div id="container">
+      <span id="text1"></span>
+      <span id="text2"></span>
+    </div>
+
+    <div id="header-plugin"></div>
+    <div class="bg_heart"></div>
+
+    <svg id="filters">
+      <defs>
+        <filter id="threshold">
+          <feColorMatrix
+            in="SourceGraphic"
+            type="matrix"
+            values="1 0 0 0 0
+                        0 1 0 0 0
+                        0 0 1 0 0
+                        0 0 0 255 -140"
+          />
+        </filter>
+      </defs>
+    </svg>
+
+    <!-- Rounded switch -->
+    <div class="right">
+      <p>Toggle Tasneemode</p>
+      <label class="switch">
+        <input type="checkbox" onclick="toggleDarkMode()" />
+        <span class="slider round"></span>
+      </label>
+    </div>
+    <script src="index.js"></script>
+    <script src="hearts.js"></script>
+    <script src="morph.js"></script>
+  </body>
+</html>

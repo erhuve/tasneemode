@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+    <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+          <title>Tasneemode</title>
+          <link rel="stylesheet" href="style.css" />
+          <link rel="stylesheet" href="login.css" />
+        </head>
+<body>
+    <div class="header">
+        <h3>Tasneemode</h3>
+        <div class="topnav">
+          <a href="index.html">Home</a>
+          <a class="active" href="birthday.html">Birthday</a>
+        </div>
+      </div>
+    
+  <div class="div1"> 
+    <div class="div2">
+      
+      
+    <form>
+        <label for="pswd">Enter password: </label>
+      </br>
+        <input type="password" id="pswd" class="box">
+      </br>
+        <input type="button" value="Submit" onclick="checkPswd();"                              class="confirm" />
+    </form>
+    </div>
+  </div>
+  <!-- Rounded switch -->
+  <div class="right">
+    <p>Toggle Tasneemode</p>
+    <label class="switch">
+      <input type="checkbox" onclick="toggleDarkMode()" />
+      <span class="slider round"></span>
+    </label>
+  </div>
+  <script src="index.js"></script>
+<!--Function to check password the already set password is admin-->
+<script type="text/javascript">
+    function checkPswd() {
+        var confirmPassword = "iLoveRaymondAndIHadToTypeThisOutAndAlsoGoodJobFindingThisILoveYouBtw";
+        var password = document.getElementById("pswd").value;
+        if (password == confirmPassword) {
+            window.location="birthdaysuccess.html";
+        }
+        else{
+            alert("Passwords do not match.");
+        }
+    }
+</script>
+      
+   
+</body>
+</html
+  
+
+  

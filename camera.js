@@ -1,4 +1,4 @@
-counter = 1;
+counter = 0;
 function takePic() {
   $(`#p${counter++}`).show();
 }

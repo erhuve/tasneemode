@@ -21,6 +21,8 @@ function flash(e) {
 }
 
 $(document).ready(function () {
+  $(".camera").hide();
+  $(".camera").fadeIn(3000);
   $(".flash").hide();
   $(".item").hide();
   $(".flashbutton").mouseup(function (e) {

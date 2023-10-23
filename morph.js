@@ -4,7 +4,6 @@ const elts = {
 };
 
 const texts = [
-  "♥ Happy Birthday! ♥",
   "♥ I love you ♥",
   "♥ আমি তোকে ভালবাসি ♥",
   "♥ 我爱你 ♥",

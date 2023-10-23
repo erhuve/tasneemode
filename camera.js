@@ -1,6 +1,15 @@
 counter = 0;
+remaining = 20;
+
 function takePic() {
+  if (remaining <= 0) {
+    return;
+  }
   $(`#p${counter++}`).show();
+  $(".snap").text(`Snap a picture! ${--remaining}/20`);
+  if (remaining <= 0) {
+    $(".camera").fadeOut(1000);
+  }
 }
 
 function flash(e) {

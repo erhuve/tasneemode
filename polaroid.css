@@ -24,6 +24,7 @@
   text-align: center;
   line-height: 2em;
   font-family: 'Poor Story', cursive;
+  color: black !important;
 }
 .item {
     max-width: 300px;

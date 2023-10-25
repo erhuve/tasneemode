@@ -165,7 +165,7 @@ input:checked + .slider:before {
 }
 
 .snap {
-  padding-left: 100px;
+  padding-left: 50px;
   padding-bottom: -50px;
 }
 

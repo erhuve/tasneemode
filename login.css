@@ -39,3 +39,21 @@ body {
   background-color: rgba(0, 0, 0, 0);
   cursor: pointer;
 }
+
+.bday {
+  margin-top: 90px;
+  border: red;
+  background: linear-gradient(-45deg, #ee7752, rgb(188, 60, 231));
+	animation: blinker 5s linear infinite;
+  color: white;
+}
+
+@keyframes blinker {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.white {
+  color: white;
+}

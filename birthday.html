@@ -12,28 +12,30 @@
       href="https://fonts.googleapis.com/css?family=Open Sans"
       rel="stylesheet"
     />
+          <link rel="stylesheet" href="hearts.css" />
         </head>
 <body>
     <div class="header">
         <h3>Tasneemode</h3>
         <div class="topnav">
           <a href="index.html">Home</a>
-          <a class="active" href="iloveyou.html">ILY</a>
-          <a href="birthday.html">Birthday</a>
+          <a href="iloveyou.html">ILY</a>
+          <a class="active" href="birthday.html">Birthday</a>
         </div>
       </div>
     
   <div class="div1"> 
     <div class="div2">
-      
-      
-    <form>
+
+    <form class="bday">
         <label for="pswd">Enter password: </label>
       </br>
         <input type="password" id="pswd" class="box">
       </br>
-        <input type="button" value="Submit" onclick="checkPswd();"                              class="confirm" />
+        <input type="button" value="Submit" onclick="checkPswd();" class="confirm white" />
     </form>
+    <div id="header-plugin"></div>
+    <div class="bg_heart"></div>
     </div>
   </div>
   <!-- Rounded switch -->
@@ -45,13 +47,14 @@
     </label>
   </div>
   <script src="index.js"></script>
+  <script src="hearts.js"></script>
 <!--Function to check password the already set password is admin-->
 <script type="text/javascript">
     function checkPswd() {
-        var confirmPassword = "password";
+        var confirmPassword = "polaroid";
         var password = document.getElementById("pswd").value;
         if (password == confirmPassword) {
-            window.location="iloveyouhearts.html";
+            window.location="instax.html";
         }
         else{
             alert("Passwords do not match.");

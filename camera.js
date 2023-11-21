@@ -21,10 +21,10 @@ function flash(e) {
 }
 
 $(document).ready(function () {
+  $(".item").hide();
   $(".camera").hide();
   $(".camera").fadeIn(3000);
   $(".flash").hide();
-  $(".item").hide();
   $(".flashbutton").mouseup(function (e) {
     flash(e);
   });

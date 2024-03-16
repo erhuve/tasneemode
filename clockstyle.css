@@ -1,5 +1,76 @@
 @import url(https://fonts.googleapis.com/css?family=Open+Sans);
 
+@media screen 
+  and (device-width: 360px) 
+ {
+	body {
+		width: 113%;
+	}
+
+	/* div {
+		width: 360px;
+	} */
+
+
+	.flex-container {
+		display: flex;
+		flex-direction: column;
+	}
+}
+
+@media screen 
+  and (device-width: 412px) 
+ {
+  body {
+	width: 100%;
+}
+
+/* div {
+	width: 360px;
+} */
+
+
+.flex-container {
+	display: flex;
+	flex-direction: column;
+}
+}
+
+@media screen 
+  and (device-width: 280px) 
+ {
+	body {
+		width: 145%;
+	}
+
+	/* div {
+		width: 360px;
+	} */
+
+
+	.flex-container {
+		display: flex;
+		flex-direction: column;
+	}
+}
+
+@media screen 
+  and (device-width: 384px) 
+ {
+	body {
+		width: 100%;
+	}
+
+	/* div {
+		width: 360px;
+	} */
+
+	.flex-container {
+		display: flex;
+		flex-direction: column;
+	}
+}
+
 /* * {
 	box-sizing: border-box;
 	margin: 0;
@@ -21,12 +92,12 @@ h1 {
 } */
 
 figure {
-	height: 500px;
-	width: 500px;
+	height: 270px;
+	width: 270px;
 	flex: 0 0 auto;
 	font-family: 'Open Sans';
 	/* position: fixed; */
-	top: 170px;
+	/* top: 170px; */
 }
 
 .after {

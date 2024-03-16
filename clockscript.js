@@ -1,15 +1,15 @@
 var amtPerSec = 3075.64;
 
 var margin = {
-  top: 40,
-  right: 40,
-  bottom: 40,
-  left: 40,
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
 };
 
 var radians = 0.0174532925;
 
-var r = 200;
+var r = 120;
 
 var secR = r + 16;
 var hourR = r - 40;

@@ -1,0 +1,85 @@
+@import url(https://fonts.googleapis.com/css?family=Open+Sans);
+
+/* * {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+} */
+
+h1 {
+	margin-left: 10px;
+	font-family: 'Open Sans';
+}
+
+.heylisten {
+	margin-left: 10px;
+	font-family: 'Open Sans';
+}
+
+/* body {
+	font-family: 'Open Sans';
+} */
+
+figure {
+	height: 500px;
+	width: 500px;
+	flex: 0 0 auto;
+	font-family: 'Open Sans';
+	/* position: fixed; */
+	top: 170px;
+}
+
+.after {
+	margin-left: 10px;
+	margin-right: 10px;
+	text-align: center;
+}
+
+.filler {
+	height: 50px;
+	width: 500px;
+	/* flex: 0 0 auto; */
+}
+
+.current {
+	/* color: white; */
+	/* float: right;
+	max-width: 800px;
+	margin-right: 100px; */
+}
+
+.flex-container {
+	display: flex;
+}
+
+.outline {
+	stroke: white;
+	stroke-width: 1;
+}
+
+.second {
+	stroke: white;
+	stroke-width: 2;
+}
+
+.hour {
+	stroke: white;
+	stroke-width: 4;
+}
+
+.second-hand {
+	stroke: white;
+	stroke-width: 3;
+}
+
+.minute-hand {
+	stroke: white;
+	stroke-width: 8;
+	stroke-linecap: round;
+}
+
+.hour-hand {
+	stroke: white;
+	stroke-width: 12;
+	stroke-linecap: butt;
+}

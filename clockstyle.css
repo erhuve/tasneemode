@@ -4,7 +4,7 @@
   and (device-width: 360px) 
  {
 	body {
-		width: 113%;
+		width: 100%;
 	}
 
 	/* div {
@@ -22,7 +22,7 @@
   and (device-width: 412px) 
  {
   body {
-	width: 100%;
+	width: 90%;
 }
 
 /* div {
@@ -40,7 +40,7 @@
   and (device-width: 280px) 
  {
 	body {
-		width: 145%;
+		width: 135%;
 	}
 
 	/* div {
@@ -58,7 +58,7 @@
   and (device-width: 384px) 
  {
 	body {
-		width: 100%;
+		width: 95%;
 	}
 
 	/* div {

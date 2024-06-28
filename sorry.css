@@ -1,0 +1,14 @@
+.container {
+    font-size: large;
+    width: 80%;
+    margin: auto;
+    padding: 24px;
+}
+
+.red {
+    color: red;
+}
+
+.green {
+    color: green;
+}

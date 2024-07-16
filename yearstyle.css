@@ -1,0 +1,182 @@
+@import url(https://fonts.googleapis.com/css?family=Open+Sans:300,400);
+@import url('https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css');
+
+.button-container {
+    display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+button {
+border: 1px solid white;
+background: #f88639;
+width: 400px;
+padding: 15px;
+border-radius: 3px;
+color: white;
+transition: background 0.5s ease;
+left: 27%;
+cursor: pointer;
+/* position: absolute; */
+/* position: relative; */
+/* margin: auto; */
+}
+
+button:hover {
+background: white;
+color: #f88639;
+font-weight: normal;
+}
+
+button:hover i {
+color: #f88639;
+}
+
+i {
+color: white;
+margin-left: 20px;
+}
+
+.arrow1 {
+animation: slide1 1s ease-in-out infinite;
+margin-left: 9px;
+}
+
+@keyframes slide1 {
+0%,
+100% {
+    transform: translate(0, 0);
+}
+
+50% {
+    transform: translate(10px, 0);
+}
+}
+  
+.container {
+    width: 400px;
+    height: 400px;
+    border: 3px solid #f88639;
+    border-radius: 19px;
+    overflow: scroll;
+    padding: 10px;
+    margin: auto;
+    margin-bottom: 5px;
+}
+
+.message-blue {
+    position: relative;
+    margin-left: 20px;
+    margin-bottom: 10px;
+    padding: 10px;
+    background-color: #f88639;
+    width: 200px;
+    height: 50px;
+    text-align: left;
+    font: 400 .9em 'Open Sans', sans-serif;
+    border: 1px solid #f88639;
+    border-radius: 10px;
+}
+
+.message-orange {
+    position: relative;
+    margin-bottom: 10px;
+    margin-left: calc(100% - 240px);
+    padding: 10px;
+    background-color: #ac59ff;
+    width: 200px;
+    height: 50px;
+    text-align: left;
+    font: 400 .9em 'Open Sans', sans-serif;
+    border: 1px solid #ac59ff;
+    border-radius: 10px;
+}
+
+.message-content {
+    padding: 0;
+    margin: 0;
+}
+
+.message-timestamp-right {
+    position: absolute;
+    font-size: .85em;
+    font-weight: 300;
+    bottom: 5px;
+    right: 5px;
+}
+
+.message-timestamp-left {
+    position: absolute;
+    font-size: .85em;
+    font-weight: 300;
+    bottom: 5px;
+    left: 5px;
+}
+
+.message-blue:after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-top: 15px solid #f88639;
+    border-left: 15px solid transparent;
+    border-right: 15px solid transparent;
+    top: 0;
+    left: -15px;
+}
+
+.message-blue:before {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-top: 17px solid #f88639;
+    border-left: 16px solid transparent;
+    border-right: 16px solid transparent;
+    top: -1px;
+    left: -17px;
+}
+
+.message-orange:after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-bottom: 15px solid #ac59ff;
+    border-left: 15px solid transparent;
+    border-right: 15px solid transparent;
+    bottom: 0;
+    right: -15px;
+}
+
+.message-orange:before {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-bottom: 17px solid #ac59ff;
+    border-left: 16px solid transparent;
+    border-right: 16px solid transparent;
+    bottom: -1px;
+    right: -17px;
+}
+
+#vid {
+    margin: 0 auto;
+    display: block;
+}
+
+#toletters {
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+
+
+
+
+
+
+
+
+

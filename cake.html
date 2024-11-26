@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+  <title>Tasneemode</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+  <link rel="stylesheet" href="cake.css"></link>
+</head>
+<body>
+  <div class="header">
+    <h3 class="tasneemode">Tasneemode</h3>
+    <div class="topnav">
+      <a href="index.html">Home</a>
+      <a href="iloveyou.html">ILY</a>
+      <a href="21.html">Birthday</a>
+      <a href="31724.html">1 Year Meetiversary</a>
+      <a href="year.html">Anniversary</a>
+      <a class="active" href="cake.html">Birthday Part 2!</a>
+    </div>
+  </div>
+  <p style="text-align: center;">Happy Birthday Dear! Click the candles to light them and the sprinkles to decorate more!</p>
+  <div class="page-container">
+  <div class="cake-container">
+    <div class="cake">
+      <div class="cake-top">
+        <span class="candle" onclick="lightCandle(1)"></span>
+        <span class="candle" onclick="lightCandle(2)"></span>
+        <span class="candle" onclick="lightCandle(3)"></span>
+      </div>
+      <div class="cake-bottom">
+        <div class="sprinkle" onclick="decorateCake()"></div>
+        <div class="sprinkle" onclick="decorateCake()"></div>
+        <div class="sprinkle" onclick="decorateCake()"></div>
+      </div>
+    </div>
+    <button id="cutCakeBtn" onclick="cutCake()">Make a wish!</button>
+    <div id="birthdayMessage" class="hidden">
+      <h2>Happy Birthday Love!</h2>
+      <p>I love you so much honey. Through thick and thin I'll always be with you dear. <br>When times are tough, we'll make them sweeter and get through them. And when times are nice, we'll cherish it and still make it even sweeter!</p>
+      <p>In fact, no matter the time, we'll make it sweeter than cake. You're the sweetest dear and I love, admire, respect, adore, and appreciate you so much. This next year and all the years ahead will get sweeter.</p>
+      <p>No matter the time, honey, we can sprinkle some sweetness on top. We can light a candle, we can be the little flame keeping each other warm and brighter when it's dark.</p>
+      <p>I'll always be with you. I'm always here for you. I'm so proud of you. I'm so happy for all you've accomplished, for all the love and care and friendship you've accrued, for all how far you've come and grown dear.</p>
+      <p>I'm so fortunate to even have a small slice of the cake that is you, dear. You are everything and you are my angel and together we'll do everything love.</p>
+      <p>I love you. Happy 22 dear, a good number with us being 2 years 2 months 2 days apart, with the 2 of us being meant 2 be. So happy 22 and here's 2 many more. I love you :></p>
+    </div>
+  </div> 
+  </div>
+
+  <!-- Rounded switch -->
+<div class="right">
+  <p>Toggle Tasneemode</p>
+  <label class="switch">
+    
+    <input type="checkbox" onclick="toggleDarkMode()">
+    <span class="slider round"></span>
+  </label>
+</div>
+</div>
+  <script src="cake.js"></script>
+  <script src="index.js"></script>
+</body>

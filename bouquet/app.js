@@ -1,5 +1,5 @@
 import { content } from './content.js';
-import { FLOWERS, PARTS, initialState, loadState, saveState, transition } from './state.js';
+import { FLOWERS, TOTAL_PARTS, partCount, initialState, loadState, saveState, transition } from './state.js';
 import { flowerIcon } from './icons.js';
 
 const $ = selector => document.querySelector(selector);
@@ -9,6 +9,8 @@ let state = storage ? loadState(storage) : initialState();
 let view = null;
 let loading = null;
 let keyboardDragging = false;
+let transitionBusy = false;
+let focusAfterTransition = false;
 let soundEnabled = false;
 let audio;
 const title = $('#page-title');
@@ -16,13 +18,16 @@ const picker = $('#flower-picker');
 const partControls = $('#parts-tray');
 const scene = $('#scene-3d');
 
-function completed() { return state.stages.every(stage => stage === PARTS); }
+function completed() { return state.stages.every((stage, id) => stage === partCount(id)); }
+function busy() { return transitionBusy || Boolean(view?.busy); }
+function revealed() { return state.wrapped && !busy(); }
 function persist() { if (storage) saveState(storage, state); }
 function announce() {
-  $('.status').textContent = state.wrapped ? `${content.birthday} ${content.signature}` : `${state.stages.reduce((sum, stage) => sum + stage, 0)} / 20`;
+  $('.status').textContent = revealed() ? `${content.birthday} ${content.signature}` : `${state.stages.reduce((sum, stage) => sum + stage, 0)} / ${TOTAL_PARTS}`;
 }
 
 function apply(action) {
+  if (busy()) return;
   if (action.type !== 'place') { view?.cancelDrag(); keyboardDragging = false; }
   const next = transition(state, action);
   if (next === state) return;
@@ -33,7 +38,7 @@ function apply(action) {
 }
 
 function selectFlower(id) {
-  if (view?.dragging) return;
+  if (view?.dragging || busy()) return;
   apply({ type: 'select', id });
 }
 
@@ -62,13 +67,14 @@ function snapSound(final = false) {
 
 // Only the model's successful, current-stage drop can commit an attachment.
 function place(id, part) {
-  if (state.wrapped || id !== state.active || part !== state.stages[id] || part >= PARTS) return;
+  if (state.wrapped || id !== state.active || part !== state.stages[id] || part >= partCount(id)) return;
   keyboardDragging = false;
-  snapSound(part === PARTS - 1);
+  focusAfterTransition = part === partCount(id) - 1;
+  snapSound(part === partCount(id) - 1);
   apply({ type: 'place', id });
-  if (state.stages[id] < PARTS) {
+  if (state.stages[id] < partCount(id)) {
     if (partControls.contains(document.activeElement)) partControls.querySelector('.available')?.focus({ preventScroll: true });
-  } else (completed() ? $('#wrap') : $('#next-flower')).focus({ preventScroll: true });
+  } else if (!busy()) focusNextAction();
   document.body.classList.remove('just-placed');
   requestAnimationFrame(() => document.body.classList.add('just-placed'));
 }
@@ -77,46 +83,68 @@ function renderPicker() {
   const focused = document.activeElement?.getAttribute('data-flower');
   picker.innerHTML = FLOWERS.map((kind, id) => {
     const name = kind === 'tulip' ? 'purple tulips' : 'orange calendula';
-    const dots = Array.from({ length: PARTS }, (_, stage) => `<i class="${stage < state.stages[id] ? 'done' : ''}"></i>`).join('');
-    return `<button type="button" class="flower-choice" data-flower="${id}" data-kind="${kind}" aria-label="${name} ${id + 1} · ${state.stages[id]} / 4" aria-pressed="${state.active === id}" ${view ? '' : 'disabled'}>${flowerIcon(kind)}<span class="flower-dots" aria-hidden="true">${dots}</span></button>`;
+    const dots = Array.from({ length: partCount(id) }, (_, stage) => `<i class="${stage < state.stages[id] ? 'done' : ''}"></i>`).join('');
+    return `<button type="button" class="flower-choice" data-flower="${id}" data-kind="${kind}" aria-label="${name} ${id + 1} · ${state.stages[id]} / ${partCount(id)}" aria-pressed="${state.active === id}" ${view ? '' : 'disabled'}>${flowerIcon(kind)}<span class="flower-dots" aria-hidden="true">${dots}</span></button>`;
   }).join('');
-  $('.progress-thread').querySelectorAll('i').forEach((dot, id) => dot.classList.toggle('done', state.stages[id] === PARTS));
+  $('.progress-thread').querySelectorAll('i').forEach((dot, id) => dot.classList.toggle('done', state.stages[id] === partCount(id)));
   if (focused !== null) picker.querySelector(`[data-flower="${focused}"]`)?.focus({ preventScroll: true });
 }
 
 function renderParts() {
   const focused = partControls.contains(document.activeElement);
   const current = state.stages[state.active];
-  partControls.innerHTML = Array.from({ length: PARTS }, (_, stage) => `<button type="button" class="keyboard-part ${stage === current ? 'available' : ''}" data-part="${stage}" aria-label="${stage + 1} / 4" ${stage === current && view ? '' : 'disabled'}>${stage + 1}</button>`).join('');
+  const count = partCount(state.active);
+  partControls.setAttribute('aria-label', `${Math.min(count, current + 1)} / ${count}`);
+  partControls.innerHTML = current < count ? `<button type="button" class="keyboard-part available" data-part="${current}" aria-label="${current + 1} / ${count}" ${view && !busy() ? '' : 'disabled'}>${current + 1} / ${count}</button>` : '';
   if (focused) partControls.querySelector('.available')?.focus({ preventScroll: true });
+}
+
+function focusNextAction() {
+  focusAfterTransition = false;
+  const target = revealed() ? $('#arrange-left') : completed() ? $('#wrap') : $('#next-flower');
+  if (!target.hidden && !target.disabled) target.focus({ preventScroll: true });
+}
+
+function transitionChanged(value) {
+  transitionBusy = value;
+  document.body.classList.toggle('is-transitioning', value);
+  scene.setAttribute('aria-busy', String(value));
+  renderUI();
+  announce();
+  if (!value && focusAfterTransition) focusNextAction();
 }
 
 function dragChanged(dragging) {
   if (!dragging) keyboardDragging = false;
   document.body.classList.toggle('is-dragging', dragging);
-  picker.querySelectorAll('button').forEach(button => { button.disabled = !view || dragging; });
-  $('#undo').disabled = !view || dragging || (!state.wrapped && state.stages[state.active] === 0);
-  $('#camera-reset').disabled = !view || dragging;
-  $('#camera-spin').disabled = !view || dragging;
-  $('#next-flower').disabled = !view || dragging;
-  $('#wrap').disabled = !view || dragging;
-  $('.arrange-tools').querySelectorAll('button').forEach(button => { button.disabled = !view || dragging; });
+  const locked = !view || dragging || busy();
+  picker.querySelectorAll('button').forEach(button => { button.disabled = locked; });
+  $('#undo').disabled = locked || (!state.wrapped && state.stages[state.active] === 0);
+  $('#camera-reset').disabled = locked;
+  $('#camera-spin').disabled = locked;
+  $('#next-flower').disabled = locked;
+  $('#wrap').disabled = locked;
+  $('.arrange-tools').querySelectorAll('button').forEach(button => { button.disabled = locked; });
 }
 
 function render() {
-  document.body.classList.toggle('is-wrapped', state.wrapped);
-  title.textContent = state.wrapped ? content.birthday : content.title;
   view?.update({ ...state, signature: content.signature });
+  renderUI();
+}
+
+function renderUI() {
+  document.body.classList.toggle('is-wrapped', revealed());
+  title.textContent = revealed() ? content.birthday : content.title;
   $('.camera-tools').hidden = !view;
   $('.gesture-cue').hidden = !view;
   $('#wrap').hidden = state.wrapped || !completed() || !view;
-  $('#next-flower').hidden = state.wrapped || completed() || state.stages[state.active] !== PARTS || !view;
-  $('.arrange-tools').hidden = !state.wrapped || !view;
-  partControls.hidden = state.wrapped || !view || state.stages[state.active] === PARTS;
-  const note = state.stages[state.active] === PARTS ? content.notes[state.active] : '';
+  $('#next-flower').hidden = state.wrapped || completed() || state.stages[state.active] !== partCount(state.active) || !view;
+  $('.arrange-tools').hidden = !revealed() || !view;
+  partControls.hidden = state.wrapped || !view || state.stages[state.active] === partCount(state.active);
+  const note = state.stages[state.active] === partCount(state.active) ? content.notes[state.active] : '';
   $('#personal-note').textContent = note || '';
   $('#personal-note').hidden = !note;
-  $('#footer-count').textContent = `${state.stages.reduce((sum, stage) => sum + stage, 0)} / 20`;
+  $('#footer-count').textContent = `${state.stages.reduce((sum, stage) => sum + stage, 0)} / ${TOTAL_PARTS}`;
   renderPicker();
   renderParts();
   dragChanged(Boolean(view?.dragging));
@@ -129,7 +157,7 @@ async function startView() {
   $('#retry-view').hidden = true;
   loading = import('./view-3d.js').then(module => {
     scene.replaceChildren();
-    view = module.create3DView({ container: scene, onPlace: place, onSelect: selectFlower, onError: failView, onDragChange: dragChanged });
+    view = module.create3DView({ container: scene, onPlace: place, onSelect: selectFlower, onError: failView, onDragChange: dragChanged, onTransitionChange: transitionChanged });
     view.update({ ...state, signature: content.signature });
     view.setActive(!document.hidden);
     render();
@@ -144,6 +172,8 @@ async function startView() {
 function failView(error) {
   console.error('Bouquet WebGL:', error);
   keyboardDragging = false;
+  transitionBusy = false;
+  document.body.classList.remove('is-transitioning');
   view?.destroy();
   view = null;
   scene.replaceChildren();
@@ -158,7 +188,7 @@ picker.addEventListener('click', event => {
 
 // Keyboard users also move a piece into the snap zone. No activation attaches it by itself.
 partControls.addEventListener('keydown', event => {
-  if (!view || !event.target.closest('.available')) return;
+  if (!view || busy() || !event.target.closest('.available')) return;
   const deltas = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
@@ -182,10 +212,15 @@ $('#undo').addEventListener('click', () => apply({ type: 'undo' }));
 $('#next-flower').addEventListener('click', () => {
   for (let offset = 1; offset <= FLOWERS.length; offset++) {
     const id = (state.active + offset) % FLOWERS.length;
-    if (state.stages[id] < PARTS) { selectFlower(id); picker.querySelector(`[data-flower="${id}"]`)?.focus({ preventScroll: true }); break; }
+    if (state.stages[id] < partCount(id)) { selectFlower(id); picker.querySelector(`[data-flower="${id}"]`)?.focus({ preventScroll: true }); break; }
   }
 });
-$('#wrap').addEventListener('click', () => { snapSound(true); apply({ type: 'wrap' }); $('#arrange-left').focus({ preventScroll: true }); });
+$('#wrap').addEventListener('click', () => {
+  focusAfterTransition = true;
+  snapSound(true);
+  apply({ type: 'wrap' });
+  if (!busy()) focusNextAction();
+});
 $('#arrange-left').addEventListener('click', () => apply({ type: 'arrange', direction: -1 }));
 $('#arrange-right').addEventListener('click', () => apply({ type: 'arrange', direction: 1 }));
 $('#camera-reset').addEventListener('click', () => view?.resetView());

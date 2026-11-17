@@ -43,8 +43,8 @@ h1{font-family:var(--serif);font-weight:400;letter-spacing:-1.6px;font-size:clam
 .flower-choice:hover{transform:translateY(-3px)}
 .flower-choice[aria-pressed=true]{background:#eee1eb;border-color:#d9c6df}
 .flower-choice svg{display:block;width:100%;height:42px;overflow:visible}
-.flower-choice .flower-dots{position:absolute;bottom:6px;left:0;right:0;display:flex;gap:3px;justify-content:center}
-.flower-dots i{height:3px;width:3px;background:#cfc0d0;border-radius:50%}
+.flower-choice .flower-dots{position:absolute;bottom:6px;left:0;right:0;display:flex;gap:2px;justify-content:center}
+.flower-dots i{height:2px;width:2px;background:#cfc0d0;border-radius:50%}
 .flower-dots i.done{background:var(--purple)}
 .flower-choice[data-kind=calendula] .flower-dots i.done{background:var(--orange)}
 .assembly-tools{display:flex;align-items:center;justify-content:center;gap:18px;min-height:48px}
@@ -59,19 +59,17 @@ h1{font-family:var(--serif);font-weight:400;letter-spacing:-1.6px;font-size:clam
 footer{display:flex;align-items:center;justify-content:center;gap:16px;margin:22px auto 0;color:#a191a2;font-size:10px;letter-spacing:2px}
 .footer-line{height:1px;width:44px;background:#dfd2dc}
 .status{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-body.is-wrapped .intro{margin-top:30px}
 body.is-wrapped h1{min-height:108px}
 body.is-wrapped .desk{margin-top:-12px}
 body.is-wrapped .desk-oval{background:radial-gradient(ellipse,#e5d4e8 0%,#eee0e9 50%,#f7f0e500 72%)}
 body.is-wrapped .flower-picker{margin-bottom:4px}
-body.is-wrapped .assembly-tools{min-height:62px}
 body.just-placed .flower-choice[aria-pressed=true]{animation:pop .4s}
 @keyframes breathe{0%,100%{opacity:.3}50%{opacity:1}}
 @keyframes invitation{0%,100%{box-shadow:0 0 0 0 #9b6db500}50%{box-shadow:0 0 0 7px #9b6db512}}
 @keyframes pop{0%,100%{transform:scale(1)}40%{transform:scale(1.1)}}
 @media(min-width:1400px){.workshop{padding-top:36px}.intro{margin-top:28px}.desk{height:600px}}
 @media(max-width:800px){.workshop{padding:20px 24px}.top-actions{gap:0}.intro{margin-top:22px}.desk{height:560px}.progress-thread{left:1%}.assembly-tools{gap:12px}}
-@media(max-width:540px){.workshop{padding:16px 17px 24px}.topbar{gap:7px;min-height:38px}.top-actions .icon-button{width:36px;height:36px;padding:8px}.intro{margin-top:18px;max-width:340px}.tiny-flower{font-size:21px;margin-bottom:12px}h1{font-size:30px;letter-spacing:-1px;line-height:1.17;min-height:108px}.desk{height:540px;margin-top:0}.desk-oval{left:-20%;right:-20%;bottom:7%;height:42%}.progress-thread{left:3%;gap:10px;top:35%}.camera-tools{right:0;bottom:0}.camera-tools .icon-button{height:37px;width:37px}.gesture-cue{bottom:4px;width:70px;margin-left:-35px}.flower-picker{gap:6px;margin-top:1px;margin-bottom:12px}.flower-choice{width:51px;height:60px;padding:5px 8px 10px}.flower-choice svg{height:38px}.assembly-tools{gap:9px;min-height:44px;flex-wrap:wrap}.round-action{width:43px;height:43px;padding:11px}.ribbon-action{width:65px;height:51px}footer{margin-top:18px}.personal-note{font-size:21px}body.is-wrapped .intro{margin-top:22px}body.is-wrapped .desk{height:450px;margin-top:-5px}body.is-wrapped .flower-picker{margin-bottom:12px}}
+@media(max-width:540px){.workshop{padding:16px 17px 24px}.topbar{gap:7px;min-height:38px}.top-actions .icon-button{width:36px;height:36px;padding:8px}.intro{margin-top:18px;max-width:340px}.tiny-flower{font-size:21px;margin-bottom:12px}h1{font-size:30px;letter-spacing:-1px;line-height:1.17;min-height:108px}.desk{height:540px;margin-top:0}.desk-oval{left:-20%;right:-20%;bottom:7%;height:42%}.progress-thread{left:3%;gap:10px;top:35%}.camera-tools{right:0;bottom:0}.camera-tools .icon-button{height:37px;width:37px}.gesture-cue{bottom:4px;width:70px;margin-left:-35px}.flower-picker{gap:6px;margin-top:1px;margin-bottom:12px}.flower-choice{width:51px;height:60px;padding:5px 8px 10px}.flower-choice svg{height:38px}.assembly-tools{gap:9px;min-height:44px;flex-wrap:wrap}.round-action{width:43px;height:43px;padding:11px}.ribbon-action{width:65px;height:51px}footer{margin-top:18px}.personal-note{font-size:21px}body.is-wrapped .intro{margin-top:18px}body.is-wrapped .desk{height:540px;margin-top:0}body.is-wrapped .flower-picker{margin-bottom:12px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .scene-loading{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);display:flex;gap:8px;pointer-events:none}
@@ -84,6 +82,10 @@ body.just-placed .flower-choice[aria-pressed=true]{animation:pop .4s}
 .snap-target.is-ready:after{background:#6e8d55;width:7px;height:7px}
 .keyboard-parts{display:flex;gap:10px;opacity:0;pointer-events:none;transition:opacity .15s}
 .keyboard-parts:focus-within{opacity:1;pointer-events:auto}
-.keyboard-part{width:40px;height:40px;background:#eee2ee;border:1px solid #d6bedf;border-radius:50%;font-size:12px}
+.keyboard-part{min-width:64px;height:40px;padding:0 12px;background:#eee2ee;border:1px solid #d6bedf;border-radius:24px;font-size:12px}
 .keyboard-part:disabled{opacity:.22}
 .is-dragging .gesture-cue{opacity:0}
+.is-transitioning .flower-picker{opacity:.45;transition:opacity .3s}
+.is-transitioning .gesture-cue{opacity:0}
+body.is-wrapped h1{animation:birthday-reveal .65s ease-out both}
+@keyframes birthday-reveal{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}

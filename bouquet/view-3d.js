@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { canSnapDrop } from './drag-math.js';
+import { PART_COUNTS, partCount } from './state.js';
+import { WRAPPER, STEM_RADIUS, WRAP_DURATION_MS, wrapperPoint, wrappingSurfacePoint, getBouquetArrangement, wrappingProgress } from './arrangement.js';
 
 /** A procedural, shared-state view. The host owns selection and progression. */
-export function create3DView({ container, onPlace, onSelect, onError, onDragChange } = {}) {
+export function create3DView({ container, onPlace, onSelect, onError, onDragChange, onTransitionChange } = {}) {
   if (!container) throw new Error('A container is required for the bouquet view.');
 
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -180,7 +182,7 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
   const bouquetRoot = new THREE.Group();
   scene.add(bouquetRoot);
   const pot = new THREE.Group();
-  bouquetRoot.add(pot);
+  scene.add(pot);
   const potProfile = [new THREE.Vector2(0.31, 0), new THREE.Vector2(0.33, 0.04), new THREE.Vector2(0.43, 0.63), new THREE.Vector2(0.45, 0.68), new THREE.Vector2(0.40, 0.7), new THREE.Vector2(0.385, 0.12)];
   mesh(keepGeometry(new THREE.LatheGeometry(potProfile, 40)), colors.ceramic, pot);
   const rim = mesh(torus, colors.ceramic, pot, [0, 0.675, 0], [0.425, 0.425, 0.34]);
@@ -188,71 +190,71 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
 
   function makeFlower(id) {
     const root = new THREE.Group();
-    const stages = [];
     const tulip = id < 3;
-    const heights = [2.11, 2.30, 2.03, 2.40, 2.35];
-    const height = heights[id];
-    for (const y of [0, height * 0.4, height, height]) {
+    const height = [2.11, 2.30, 2.03, 2.40, 2.35][id];
+    const stages = Array.from({ length: partCount(id) }, (_, index) => {
       const group = new THREE.Group();
+      const y = index === 0 ? 0 : index === 1 ? height * 0.4 : index === 2 ? height * 0.4 - 0.28 : height;
       group.position.y = y;
       group.userData.baseY = y;
       root.add(group);
-      stages.push(group);
-    }
-    const [stem, leaves, outer, inner] = stages;
+      return group;
+    });
+    const stem = stages[0];
     mesh(cylinder, colors.stem, stem, [0, height / 2, 0], [0.055, height, 0.055]);
     mesh(sphere, colors.stem, stem, [0, height, 0], [0.058, 0.058, 0.058]);
-    for (const y of [0.12, height - 0.1]) {
-      mesh(cylinder, colors.leaf, stem, [0, y, 0], [0.077, 0.052, 0.077]);
-    }
-    const leaf1 = mesh(leafGeometry, colors.leaf, leaves, [0, 0, 0], tulip ? [1, 1, 1] : [0.86, 0.78, 0.85]);
+    for (const y of [0.12, height - 0.1]) mesh(cylinder, colors.leaf, stem, [0, y, 0], [0.077, 0.052, 0.077]);
+    const leaf1 = mesh(leafGeometry, colors.leaf, stages[1], [0, 0, 0], tulip ? [1, 1, 1] : [0.86, 0.78, 0.85]);
     leaf1.rotation.set(-0.12, 0.35, -0.48);
-    const leaf2 = mesh(leafGeometry, colors.leafLight, leaves, [0, -0.28, 0], tulip ? [0.87, 0.88, 0.9] : [0.7, 0.7, 0.8]);
+    const leaf2 = mesh(leafGeometry, colors.leafLight, stages[2], [0, 0, 0], tulip ? [0.87, 0.88, 0.9] : [0.7, 0.7, 0.8]);
     leaf2.rotation.set(0.08, Math.PI + 0.35, 0.48);
-    mesh(cylinder, colors.stem, outer, [0, -0.045, 0], [0.13, 0.13, 0.13]);
-    mesh(sphere, colors.leaf, outer, [0, 0.015, 0], [0.23, 0.10, 0.23]);
+    mesh(cylinder, colors.stem, stages[3], [0, -0.045, 0], [0.13, 0.13, 0.13]);
+    mesh(sphere, colors.leaf, stages[3], [0, 0.015, 0], [0.23, 0.10, 0.23]);
     if (tulip) {
-      for (let i = 0; i < 3; i++) {
-        const petal = mesh(tulipPetal, i === 1 ? colors.purpleEdge : colors.purple, outer);
-        petal.rotation.y = i * Math.PI * 2 / 3 + id * 0.18;
+      for (let index = 0; index < 3; index++) {
+        const petal = mesh(tulipPetal, index === 1 ? colors.purpleEdge : colors.purple, stages[3 + index]);
+        petal.rotation.y = index * Math.PI * 2 / 3 + id * 0.18;
       }
-      for (let i = 0; i < 3; i++) {
-        const petal = mesh(tulipPetal, i === 2 ? colors.purpleEdge : colors.purpleLight, inner, [0, 0.018, 0], [0.91, 1.02, 0.91]);
-        petal.rotation.y = i * Math.PI * 2 / 3 + Math.PI / 3 + id * 0.18;
+      const crown = stages[6];
+      for (let index = 0; index < 3; index++) {
+        const petal = mesh(tulipPetal, index === 2 ? colors.purpleEdge : colors.purpleLight, crown, [0, 0.018, 0], [0.91, 1.02, 0.91]);
+        petal.rotation.y = index * Math.PI * 2 / 3 + Math.PI / 3 + id * 0.18;
       }
-      mesh(sphere, colors.pollen, inner, [0, 0.27, 0], [0.11, 0.09, 0.11]);
-      for (let i = 0; i < 3; i++) {
-        const angle = i * Math.PI * 2 / 3;
-        mesh(sphere, colors.amber, inner, [Math.sin(angle) * 0.09, 0.34, Math.cos(angle) * 0.09], [0.025, 0.06, 0.025]);
+      mesh(sphere, colors.pollen, crown, [0, 0.27, 0], [0.11, 0.09, 0.11]);
+      for (let index = 0; index < 3; index++) {
+        const angle = index * Math.PI * 2 / 3;
+        mesh(sphere, colors.amber, crown, [Math.sin(angle) * 0.09, 0.34, Math.cos(angle) * 0.09], [0.025, 0.06, 0.025]);
       }
     } else {
-      outer.rotation.x = 0.9;
-      inner.rotation.x = 0.9;
-      for (let i = 0; i < 19; i++) {
-        const petal = mesh(calendulaPetal, i % 3 ? colors.orange : colors.orangeLight, outer);
-        petal.rotation.y = i * Math.PI * 2 / 19;
-        petal.position.y = (i % 3) * 0.009;
+      for (let index = 3; index < stages.length; index++) stages[index].rotation.x = 0.9;
+      for (let index = 0; index < 19; index++) {
+        const sector = Math.min(3, Math.floor(index / 5));
+        const petal = mesh(calendulaPetal, index % 3 ? colors.orange : colors.orangeLight, stages[3 + sector]);
+        petal.rotation.y = index * Math.PI * 2 / 19;
+        petal.position.y = (index % 3) * 0.009;
       }
-      for (let i = 0; i < 15; i++) {
-        const petal = mesh(calendulaPetal, i % 3 ? colors.orangeLight : colors.orange, inner, [0, 0.055, 0], [0.85, 1.0, 0.74]);
-        petal.rotation.y = i * Math.PI * 2 / 15 + 0.12;
+      for (let index = 0; index < 15; index++) {
+        const half = index < 8 ? 0 : 1;
+        const petal = mesh(calendulaPetal, index % 3 ? colors.orangeLight : colors.orange, stages[7 + half], [0, 0.055, 0], [0.85, 1, 0.74]);
+        petal.rotation.y = index * Math.PI * 2 / 15 + 0.12;
       }
-      mesh(sphere, colors.amber, inner, [0, 0.13, 0], [0.215, 0.095, 0.215]);
+      const center = stages[9];
+      mesh(sphere, colors.amber, center, [0, 0.13, 0], [0.215, 0.095, 0.215]);
       const pollen = new THREE.InstancedMesh(sphere, colors.pollen, 27);
       pollen.userData.solidMaterial = colors.pollen;
       const dummy = new THREE.Object3D();
-      for (let i = 0; i < 27; i++) {
-        const radius = 0.17 * Math.sqrt(i / 27);
-        const angle = i * 2.399963;
+      for (let index = 0; index < 27; index++) {
+        const radius = 0.17 * Math.sqrt(index / 27);
+        const angle = index * 2.399963;
         dummy.position.set(Math.cos(angle) * radius, 0.215 - radius * radius * 0.7, Math.sin(angle) * radius);
         dummy.scale.set(0.020, 0.022, 0.020);
         dummy.updateMatrix();
-        pollen.setMatrixAt(i, dummy.matrix);
+        pollen.setMatrixAt(index, dummy.matrix);
       }
       pollen.castShadow = true;
-      inner.add(pollen);
+      center.add(pollen);
     }
-    return { root, stages, id };
+    return { root, stages, id, height };
   }
 
   const activeFlowers = Array.from({ length: 5 }, (_, id) => {
@@ -267,6 +269,66 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
     bouquetRoot.add(flower.root);
     return flower;
   });
+
+  class BoundStemCurve extends THREE.Curve {
+    constructor(stem) { super(); this.stem = stem; }
+    getPoint(t, target = new THREE.Vector3()) { return target.set(...this.stem.sample(t)); }
+    getTangent(t, target = new THREE.Vector3()) { return target.set(...this.stem.tangent(t)); }
+  }
+  function poseOf(object) {
+    return { position: object.position.clone(), quaternion: object.quaternion.clone(), scale: object.scale.clone() };
+  }
+  function applyPose(object, pose) {
+    object.position.copy(pose.position); object.quaternion.copy(pose.quaternion); object.scale.copy(pose.scale);
+  }
+  let arrangementKey = '';
+  function configureBoundFlowers(order) {
+    const key = order.join(',');
+    if (key === arrangementKey) return;
+    arrangementKey = key;
+    for (const entry of getBouquetArrangement(order)) {
+      const flower = bouquetFlowers[entry.id];
+      const stemStage = flower.stages[0];
+      if (flower.boundStem) {
+        geometries.delete(flower.boundStem.geometry);
+        flower.boundStem.geometry.dispose();
+      }
+      stemStage.clear();
+      stemStage.position.set(0, 0, 0);
+      stemStage.rotation.set(0, 0, 0);
+      stemStage.scale.setScalar(1);
+      const geometry = keepGeometry(new THREE.TubeGeometry(new BoundStemCurve(entry.stem), 56, STEM_RADIUS, 9, false));
+      const straight = new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(), new THREE.Vector3(0, flower.height, 0)), 56, 0.055, 9, false);
+      geometry.morphAttributes.position = [straight.attributes.position.clone()];
+      geometry.morphAttributes.normal = [straight.attributes.normal.clone()];
+      straight.dispose();
+      geometry.computeBoundingSphere();
+      flower.boundStem = mesh(geometry, colors.stem, stemStage);
+      flower.boundStem.updateMorphTargets();
+      flower.boundStem.morphTargetInfluences[0] = 0;
+      flower.boundConnectors = entry.connectors.map(connector => {
+        const joint = mesh(cylinder, colors.leaf, stemStage, connector.position, [connector.radius, connector.length, connector.radius]);
+        joint.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...connector.tangent));
+        joint.userData.finalScale = joint.scale.clone();
+        return joint;
+      });
+      entry.leaves.forEach((leaf, index) => {
+        const group = flower.stages[index + 1];
+        const blade = group.children[0];
+        blade.position.set(0, 0, 0); blade.rotation.set(0, 0, 0); blade.scale.setScalar(1);
+        group.position.set(...leaf.position); group.rotation.set(...leaf.rotation); group.scale.set(...leaf.scale);
+      });
+      for (let index = 3; index < flower.stages.length; index++) {
+        const group = flower.stages[index];
+        group.position.set(...entry.head);
+        group.quaternion.setFromEuler(new THREE.Euler(...entry.headRotation));
+        if (entry.id >= 3) group.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.9));
+        group.scale.setScalar(1);
+      }
+      flower.boundPoses = flower.stages.map(poseOf);
+    }
+  }
+  configureBoundFlowers([0, 1, 2, 3, 4]);
 
   // Loose components are the actual flower meshes, centered in four physical
   // tray wells. Their final transform is exactly the corresponding stage's.
@@ -314,7 +376,7 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
     piece.scale.setScalar(scale);
     piece.updateMatrixWorld(true);
     const restingBounds = new THREE.Box3().setFromObject(piece);
-    const restPosition = new THREE.Vector3((index - 1.5) * 0.92, 0.17 - restingBounds.min.y, 1.22);
+    const restPosition = new THREE.Vector3(0, 0.17 - restingBounds.min.y, 1.22);
     piece.position.copy(restPosition);
     piece.userData.part = index;
     trayRoot.add(piece);
@@ -323,15 +385,36 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
 
   const wrapping = new THREE.Group();
   bouquetRoot.add(wrapping);
-  const wrapperGeometry = thickSurface((u, v) => {
-    const angle = u * Math.PI * 2;
-    const radius = 0.22 + v * 0.69;
-    const top = 1.54 + 0.24 * Math.cos(angle + 0.4) + 0.075 * Math.sin(angle * 2);
-    return [Math.sin(angle) * radius, 0.1 + v * (top - 0.1), Math.cos(angle) * radius];
-  }, u => [Math.sin(u * Math.PI * 2), 0, Math.cos(u * Math.PI * 2)], 48, 5, 0.022);
-  mesh(wrapperGeometry, colors.paper, wrapping);
-  const ribbonBandGeometry = keepGeometry(new THREE.CylinderGeometry(0.54, 0.48, 0.14, 48, 1, true));
-  mesh(ribbonBandGeometry, colors.ribbon, wrapping, [0, 0.78, 0]);
+  const paperPanels = Array.from({ length: 3 }, (_, index) => {
+    const pivot = new THREE.Group();
+    pivot.position.y = 0.78;
+    const start = index / 3 - 0.006;
+    const span = 1 / 3 + 0.012;
+    const geometry = thickSurface((u, v) => {
+      const point = wrapperPoint(start + u * span, v);
+      point[1] -= 0.78;
+      return point;
+    }, u => [Math.sin((start + u * span) * Math.PI * 2), 0, Math.cos((start + u * span) * Math.PI * 2)], 24, 8, WRAPPER.thickness);
+    pivot.userData.surface = mesh(geometry, colors.paper, pivot);
+    pivot.userData.surfaceRange = { start, span, across: 24, along: 8 };
+    pivot.userData.foldAxis = new THREE.Vector3(Math.cos((start + span / 2) * Math.PI * 2), 0, -Math.sin((start + span / 2) * Math.PI * 2));
+    wrapping.add(pivot);
+    return pivot;
+  });
+  const bandGeometry = thickSurface((u, v) => {
+    const y = 0.78 + (v - 0.5) * 0.14;
+    const top = wrapperPoint(u, 1)[1];
+    const point = wrapperPoint(u, (y - WRAPPER.baseY) / (top - WRAPPER.baseY));
+    point[0] += Math.sin(u * Math.PI * 2) * 0.014;
+    point[2] += Math.cos(u * Math.PI * 2) * 0.014;
+    return point;
+  }, u => [Math.sin(u * Math.PI * 2), 0, Math.cos(u * Math.PI * 2)], 48, 3, 0.012);
+  const ribbonBand = mesh(bandGeometry, colors.ribbon, wrapping);
+  const bowRoot = new THREE.Group();
+  wrapping.add(bowRoot);
+  const ribbonParts = [];
+  const tagRoot = new THREE.Group();
+  wrapping.add(tagRoot);
 
   function addRibbon(points, width) {
     const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
@@ -342,13 +425,15 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
       p.addScaledVector(perpendicular, (u - 0.5) * width);
       return [p.x, p.y, p.z];
     }, () => [0, 0, 1], 2, 32, 0.018);
-    return mesh(geometry, colors.ribbon, wrapping);
+    const part = mesh(geometry, colors.ribbon, bowRoot);
+    ribbonParts.push(part);
+    return part;
   }
   addRibbon([[0, 0.82, 0.56], [-0.31, 1.02, 0.61], [-0.66, 0.99, 0.57], [-0.57, 0.75, 0.58], [0, 0.82, 0.6]], 0.13);
   addRibbon([[0, 0.82, 0.59], [0.33, 1.02, 0.63], [0.62, 0.94, 0.58], [0.51, 0.72, 0.60], [0, 0.82, 0.62]], 0.13);
   addRibbon([[-0.035, 0.81, 0.61], [-0.17, 0.61, 0.67], [-0.23, 0.3, 0.56], [-0.15, 0.2, 0.48]], 0.17);
   addRibbon([[0.04, 0.81, 0.63], [0.19, 0.62, 0.69], [0.32, 0.43, 0.66], [0.28, 0.24, 0.51]], 0.16);
-  mesh(sphere, colors.ribbon, wrapping, [0, 0.82, 0.65], [0.115, 0.09, 0.075]);
+  const ribbonKnot = mesh(sphere, colors.ribbon, bowRoot, [0, 0.82, 0.65], [0.115, 0.09, 0.075]);
 
   const tagShape = new THREE.Shape();
   const tw = 0.42, th = 0.57, tr = 0.045;
@@ -365,7 +450,7 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
   hole.absarc(0, th / 2 - 0.075, 0.024, 0, Math.PI * 2, true);
   tagShape.holes.push(hole);
   const tagGeometry = keepGeometry(new THREE.ExtrudeGeometry(tagShape, { depth: 0.022, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: 0.008, bevelThickness: 0.007, curveSegments: 8 }));
-  const tag = mesh(tagGeometry, colors.tag, wrapping, [0.49, 0.61, 0.67]);
+  const tag = mesh(tagGeometry, colors.tag, tagRoot, [0.49, 0.61, 0.67]);
   tag.rotation.z = -0.19;
   const signatureMaterial = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, toneMapped: false });
   materials.add(signatureMaterial);
@@ -407,7 +492,7 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
     signatureMaterial.needsUpdate = true;
   }
   const stringCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(0.02, 0.85, 0.69), new THREE.Vector3(0.2, 1.01, 0.71), new THREE.Vector3(0.39, 0.91, 0.73), new THREE.Vector3(0.53, 0.81, 0.70)]);
-  mesh(keepGeometry(new THREE.TubeGeometry(stringCurve, 24, 0.009, 5, false)), colors.string, wrapping);
+  mesh(keepGeometry(new THREE.TubeGeometry(stringCurve, 24, 0.009, 5, false)), colors.string, tagRoot);
 
   let state = { active: 0, stages: [0, 0, 0, 0, 0], wrapped: false, order: [0, 1, 2, 3, 4], signature: '' };
   let active = false;
@@ -422,7 +507,14 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
   let reportedError = false;
   let drag = null;
   const arrivals = new Map();
-  const bouquetArrivals = new Map();
+  const deliveries = new Map();
+  let wrapTransition = null;
+  let wrapVisual = 0;
+  let hasHostState = false;
+  let lastBusy = false;
+  let pausedAt = null;
+  let paperProgress = -1;
+  let pendingCameraFit = false;
   const pickRoots = bouquetFlowers.map(f => f.root);
   const snapMarker = document.createElement('div');
   snapMarker.className = 'snap-target';
@@ -459,33 +551,191 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
     });
   }
 
+  const clamp01 = value => Math.max(0, Math.min(1, value));
+  const smooth = value => { const t = clamp01(value); return t * t * (3 - 2 * t); };
+  function isBusy() { return Boolean(wrapTransition || deliveries.size); }
+  function notifyTransition(phase = 'idle') {
+    const busy = isBusy();
+    container.dataset.transitioning = String(busy);
+    container.dataset.transitionPhase = busy ? phase : 'idle';
+    controls.enabled = active && !busy && !drag;
+    if (busy !== lastBusy) {
+      lastBusy = busy;
+      onTransitionChange?.(busy);
+    }
+  }
+  function updatePaper(progress) {
+    if (Math.abs(progress - paperProgress) < 0.00001) return;
+    paperProgress = progress;
+    for (const panel of paperPanels) {
+      const { start, span, across, along } = panel.userData.surfaceRange;
+      const geometry = panel.userData.surface.geometry;
+      const attribute = geometry.attributes.position;
+      let vertex = 0;
+      for (let side = 0; side < 2; side++) {
+        for (let row = 0; row <= along; row++) {
+          for (let column = 0; column <= across; column++) {
+            const u = start + column / across * span;
+            const v = row / along;
+            const p = new THREE.Vector3(...wrappingSurfacePoint(u, v, progress));
+            const du = new THREE.Vector3(...wrappingSurfacePoint(u + 0.0001, v, progress)).sub(p);
+            const dv = new THREE.Vector3(...wrappingSurfacePoint(u, Math.min(1, v + 0.0001), progress)).sub(p);
+            if (v === 1) dv.copy(p).sub(new THREE.Vector3(...wrappingSurfacePoint(u, v - 0.0001, progress)));
+            const normal = du.cross(dv).normalize();
+            p.addScaledVector(normal, WRAPPER.thickness * (side ? -0.5 : 0.5));
+            attribute.setXYZ(vertex++, p.x, p.y - 0.78, p.z);
+          }
+        }
+      }
+      attribute.needsUpdate = true;
+      geometry.computeVertexNormals();
+      geometry.computeBoundingSphere();
+    }
+  }
+  function setRibbonReveal(object, progress) {
+    object.visible = progress > 0;
+    const count = object.geometry.index.count;
+    object.geometry.setDrawRange(0, progress >= 1 ? count : Math.floor(count * progress / 3) * 3);
+  }
+  function presentation() {
+    const clock = wrappingProgress(wrapVisual);
+    const gather = clock.gather;
+    const miniScale = portrait ? 0.42 : 0.50;
+    const miniX = portrait ? -1.12 : -1.8;
+    workRoot.visible = gather < 1;
+    workRoot.position.set(portrait ? 0.68 : 0.95, 0.1 - 0.25 * gather, 0.12);
+    workRoot.scale.setScalar(Math.max(0.001, 1 - gather));
+    trayRoot.visible = gather < 1;
+    trayRoot.position.y = -0.25 * gather;
+    trayRoot.scale.setScalar(Math.max(0.001, 1 - gather));
+    bouquetRoot.position.set(THREE.MathUtils.lerp(miniX, 0, gather), THREE.MathUtils.lerp(0.03, WRAPPER.groundOffsetY, gather) + Math.sin(gather * Math.PI) * 0.42, THREE.MathUtils.lerp(-0.16, 0, gather));
+    bouquetRoot.scale.setScalar(THREE.MathUtils.lerp(miniScale, 1, gather));
+    bouquetRoot.rotation.y = THREE.MathUtils.lerp(0.10, -0.08, gather);
+    pot.position.set(miniX, 0.03 - clock.paperLift * 0.16, -0.16);
+    pot.scale.setScalar(miniScale * Math.max(0.001, 1 - clock.paperLift));
+    pot.visible = clock.paperLift < 1;
+    wrapping.visible = wrapVisual > 0;
+    updatePaper(wrapVisual);
+    for (const panel of paperPanels) {
+      panel.position.y = 0.78;
+      panel.quaternion.identity();
+      panel.scale.setScalar(1);
+    }
+    setRibbonReveal(ribbonBand, clock.band);
+    bowRoot.visible = clock.bow > 0;
+    ribbonParts.forEach((part, index) => setRibbonReveal(part, clamp01((clock.bow - index * 0.045) / (1 - index * 0.045))));
+    ribbonKnot.scale.set(0.115 * clock.bow, 0.09 * clock.bow, 0.075 * clock.bow);
+    tagRoot.visible = clock.tag > 0;
+    tagRoot.position.y = 0.34 * (1 - clock.tag);
+    tagRoot.rotation.z = -0.32 * (1 - clock.tag);
+    tagRoot.scale.setScalar(0.18 + clock.tag * 0.82);
+  }
   function layout() {
-    workRoot.visible = !state.wrapped;
-    trayRoot.visible = !state.wrapped;
-    pickupHalo.visible = !state.wrapped && state.stages[state.active] < 4;
-    pickupHalo.position.x = (state.stages[state.active] - 1.5) * 0.92;
-    workRoot.position.x = portrait ? 0.68 : 0.95;
-    pot.visible = !state.wrapped;
-    wrapping.visible = state.wrapped;
-    bouquetRoot.scale.setScalar(state.wrapped ? 1 : (portrait ? 0.42 : 0.50));
-    bouquetRoot.position.set(state.wrapped ? 0 : (portrait ? -1.12 : -1.8), state.wrapped ? 0.02 : 0.03, state.wrapped ? 0 : -0.16);
-    bouquetRoot.rotation.y = state.wrapped ? -0.08 : 0.10;
-    const slots = [
-      [-0.48, 0.35, -0.12, 0.18], [0, 0.55, -0.28, 0],
-      [0.48, 0.33, -0.15, -0.18], [-0.34, 0.05, 0.38, 0.18], [0.34, 0.08, 0.42, -0.18],
-    ];
-    state.order.forEach((id, slot) => {
-      const flower = bouquetFlowers[id];
-      const [x, y, z, lean] = slots[slot];
-      flower.root.position.set(x, y, z + (id >= 3 ? 0.13 : 0));
-      flower.root.rotation.set(id >= 3 ? 0.10 : -0.04, id >= 3 ? (slot - 2) * 0.12 : slot * 0.45, lean);
+    configureBoundFlowers(state.order);
+    const count = state.stages[state.active];
+    const pageStart = Math.floor(count / 4) * 4;
+    pickupHalo.visible = !state.wrapped && count < partCount(state.active);
+    pickupHalo.position.x = (count % 4 - 1.5) * 0.92;
+    for (const pieces of looseFlowers) for (const piece of pieces) {
+      piece.restPosition.x = (piece.index % 4 - 1.5) * 0.92;
+      piece.root.visible = piece.id === state.active && !state.wrapped && piece.index >= count && piece.index < pageStart + 4;
+      if (drag?.piece !== piece) restorePiece(piece);
+    }
+    presentation();
+  }
+  function settleFlower(flower) {
+    flower.stages.forEach((stage, index) => applyPose(stage, flower.boundPoses[index]));
+    flower.boundStem.morphTargetInfluences[0] = 0;
+    flower.boundConnectors.forEach(joint => joint.scale.copy(joint.userData.finalScale));
+  }
+  function clearTransitions() {
+    deliveries.clear();
+    wrapTransition = null;
+    for (const flower of bouquetFlowers) settleFlower(flower);
+    wrapVisual = state.wrapped ? 1 : 0;
+    presentation();
+    notifyTransition();
+  }
+  function startDelivery(id, now) {
+    const flower = bouquetFlowers[id];
+    scene.updateMatrixWorld(true);
+    const inverseParent = bouquetRoot.matrixWorld.clone().invert();
+    const sources = activeFlowers[id].stages.map((stage, index) => {
+      const source = index === 1 || index === 2 ? stage.children[0] : stage;
+      source.updateWorldMatrix(true, false);
+      const matrix = inverseParent.clone().multiply(source.matrixWorld);
+      const position = new THREE.Vector3(), quaternion = new THREE.Quaternion(), scale = new THREE.Vector3();
+      matrix.decompose(position, quaternion, scale);
+      return { position, quaternion, scale };
     });
+    deliveries.set(id, { start: now, duration: reducedMotion ? 150 : 820, sources });
+    flower.root.visible = true;
+    activeFlowers[id].root.visible = false;
+    flower.stages.forEach((stage, index) => applyPose(stage, sources[index]));
+    flower.boundStem.morphTargetInfluences[0] = 1;
+    flower.boundConnectors.forEach(joint => joint.scale.setScalar(0.0001));
+    if (!active) pausedAt = now;
+    notifyTransition('delivery');
+  }
+  function cameraPose(wrapped = state.wrapped) {
+    const target = new THREE.Vector3(wrapped ? 0 : (portrait ? 0.10 : -0.12), wrapped ? 1.70 : 1.53, wrapped ? 0 : 0.35);
+    const distance = framingDistance(wrapped);
+    const direction = new THREE.Vector3(0.22, wrapped ? 0.23 : 0.31, 1).normalize();
+    return { target, position: target.clone().addScaledVector(direction, distance), distance };
+  }
+  function startWrapping(now, reverse = false) {
+    cancelDrag();
+    for (const flower of bouquetFlowers) settleFlower(flower);
+    deliveries.clear();
+    wrapTransition = { start: now, duration: reducedMotion ? 180 : WRAP_DURATION_MS, from: wrapVisual, to: reverse ? 0 : 1,
+      cameraFrom: camera.position.clone(), targetFrom: controls.target.clone(), cameraTo: cameraPose(!reverse) };
+    if (!active) pausedAt = now;
+    notifyTransition(reverse ? 'paper' : 'gather');
+  }
+  function advanceTransitions(now) {
+    for (const [id, delivery] of deliveries) {
+      const flower = bouquetFlowers[id];
+      const t = clamp01((now - delivery.start) / delivery.duration);
+      const ease = smooth(t);
+      flower.stages.forEach((stage, index) => {
+        const from = delivery.sources[index], to = flower.boundPoses[index];
+        stage.position.copy(from.position).lerp(to.position, ease);
+        stage.position.y += Math.sin(t * Math.PI) * (portrait ? 0.46 : 0.62);
+        stage.quaternion.copy(from.quaternion).slerp(to.quaternion, ease);
+        stage.scale.copy(from.scale).lerp(to.scale, ease);
+      });
+      flower.boundStem.morphTargetInfluences[0] = 1 - ease;
+      flower.boundConnectors.forEach(joint => joint.scale.copy(joint.userData.finalScale).multiplyScalar(smooth((t - 0.45) / 0.55)));
+      if (t >= 1) { settleFlower(flower); deliveries.delete(id); }
+    }
+    if (wrapTransition) {
+      const transition = wrapTransition;
+      const t = clamp01((now - transition.start) / transition.duration);
+      wrapVisual = THREE.MathUtils.lerp(transition.from, transition.to, t);
+      const cameraEase = smooth(Math.min(1, t / 0.46));
+      camera.position.copy(transition.cameraFrom).lerp(transition.cameraTo.position, cameraEase);
+      controls.target.copy(transition.targetFrom).lerp(transition.cameraTo.target, cameraEase);
+      camera.lookAt(controls.target);
+      fittedDistance = transition.cameraTo.distance;
+      presentation();
+      const phase = wrapVisual < 0.25 ? 'gather' : wrapVisual < 0.60 ? 'paper' : wrapVisual < 0.88 ? 'ribbon' : 'tag';
+      if (t >= 1) {
+        wrapTransition = null;
+        wrapVisual = transition.to;
+        cameraLimits(fittedDistance);
+        presentation();
+        notifyTransition();
+      } else notifyTransition(phase);
+    } else {
+      if (!isBusy() && pendingCameraFit) { pendingCameraFit = false; resetView(); }
+      notifyTransition(deliveries.size ? 'delivery' : 'idle');
+    }
   }
 
-  function framingDistance() {
+  function framingDistance(wrapped = state.wrapped) {
     const aspect = width / Math.max(height, 1) || 1;
-    const visualHeight = state.wrapped ? 4.15 : 4.25;
-    const visualWidth = state.wrapped ? 3.45 : (portrait ? 4.25 : 5.05);
+    const visualHeight = wrapped ? 4.25 : 4.25;
+    const visualWidth = wrapped ? 3.75 : (portrait ? 4.25 : 5.05);
     const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
     return Math.max(visualHeight / (2 * Math.tan(halfFov)), visualWidth / (2 * Math.tan(halfFov) * aspect));
   }
@@ -498,13 +748,12 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
   function resetView() {
     if (destroyed) return;
     cancelDrag();
-    const target = new THREE.Vector3(state.wrapped ? 0 : (portrait ? 0.10 : -0.12), state.wrapped ? 1.85 : 1.53, state.wrapped ? 0 : 0.35);
-    const distance = framingDistance();
-    const direction = new THREE.Vector3(0.22, state.wrapped ? 0.23 : 0.31, 1).normalize();
-    camera.position.copy(target).addScaledVector(direction, distance);
-    controls.target.copy(target);
-    cameraLimits(distance);
-    fittedDistance = distance;
+    if (isBusy()) return;
+    const pose = cameraPose();
+    camera.position.copy(pose.position);
+    controls.target.copy(pose.target);
+    cameraLimits(pose.distance);
+    fittedDistance = pose.distance;
     controls.update();
     hasFramed = true;
     if (active) renderer.render(scene, camera);
@@ -525,6 +774,11 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     layout();
+    if (isBusy()) {
+      if (wrapTransition) wrapTransition.cameraTo = cameraPose(wrapTransition.to === 1);
+      else pendingCameraFit = true;
+      return;
+    }
     if (!hasFramed || oldPortrait !== portrait) resetView();
     else {
       // Refit even within one breakpoint, retaining the user's orbit and zoom ratio.
@@ -539,7 +793,7 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
   }
 
   function sanitizeState(value) {
-    const stages = Array.from({ length: 5 }, (_, i) => Math.max(0, Math.min(4, Math.floor(Number(value?.stages?.[i]) || 0))));
+    const stages = Array.from({ length: 5 }, (_, i) => Math.max(0, Math.min(partCount(i), Math.floor(Number(value?.stages?.[i]) || 0))));
     const proposedOrder = Array.isArray(value?.order) ? value.order : [];
     const order = proposedOrder.length === 5 && new Set(proposedOrder).size === 5 && proposedOrder.every(id => Number.isInteger(id) && id >= 0 && id < 5) ? [...proposedOrder] : [0, 1, 2, 3, 4];
     return { active: Math.max(0, Math.min(4, Math.floor(Number(value?.active) || 0))), stages, order, wrapped: Boolean(value?.wrapped), signature: typeof value?.signature === 'string' ? value.signature : state.signature };
@@ -548,31 +802,44 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
   function update(value) {
     if (destroyed) return;
     const next = sanitizeState(value);
+    const animate = hasHostState;
+    hasHostState = true;
+    const previous = state;
+    const changedMode = previous.wrapped !== next.wrapped;
+    const changedArrangement = previous.order.join(',') !== next.order.join(',');
+    const changedProgress = previous.stages.some((count, id) => count !== next.stages[id]);
     if (drag && (next.active !== drag.id || next.stages[drag.id] !== drag.index || next.wrapped)) cancelDrag();
-    const changedMode = state.wrapped !== next.wrapped;
+    if (isBusy() && !changedMode && (changedArrangement || changedProgress || next.active !== previous.active)) clearTransitions();
     const now = performance.now();
-    for (let id = 0; id < 5; id++) {
-      const previousCount = state.stages[id];
-      const count = next.stages[id];
-      activeFlowers[id].root.visible = id === next.active && !next.wrapped;
-      for (let stageIndex = 0; stageIndex < 4; stageIndex++) {
+    const newlyCompleted = [];
+    state = next;
+    configureBoundFlowers(state.order);
+    for (let id = 0; id < PART_COUNTS.length; id++) {
+      const previousCount = previous.stages[id];
+      const count = state.stages[id];
+      const maximum = partCount(id);
+      activeFlowers[id].root.visible = id === state.active && !state.wrapped && count < maximum;
+      for (let stageIndex = 0; stageIndex < maximum; stageIndex++) {
         const stage = activeFlowers[id].stages[stageIndex];
         setStage(stage, stageIndex < count ? 'solid' : stageIndex === count ? 'ghost' : 'future');
         setStage(bouquetFlowers[id].stages[stageIndex], 'solid');
-        const loose = looseFlowers[id][stageIndex];
-        loose.root.visible = id === next.active && !next.wrapped && stageIndex >= count;
-        setStage(loose.content, stageIndex === count ? 'solid' : 'locked');
-        if (!reducedMotion && count > previousCount && stageIndex >= previousCount && stageIndex < count) arrivals.set(stage, now);
+        setStage(looseFlowers[id][stageIndex].content, stageIndex === count ? 'solid' : 'locked');
+        if (animate && !reducedMotion && count > previousCount && count < maximum && stageIndex >= previousCount && stageIndex < count) arrivals.set(stage, now);
         if (stageIndex >= count) arrivals.delete(stage);
       }
-      bouquetFlowers[id].root.visible = count === 4 || next.wrapped;
-      if (!reducedMotion && count === 4 && previousCount < 4) bouquetArrivals.set(bouquetFlowers[id].root, now);
+      bouquetFlowers[id].root.visible = count === maximum || state.wrapped;
+      if (animate && count === maximum && previousCount < maximum && !state.wrapped) newlyCompleted.push(id);
     }
-    state = next;
     container.dataset.part = String(state.stages[state.active]);
     setSignature(state.signature);
+    if (!animate) wrapVisual = state.wrapped ? 1 : 0;
     layout();
-    if (changedMode) resetView();
+    if (!animate) {
+      for (const flower of bouquetFlowers) settleFlower(flower);
+      if (changedMode) resetView();
+      notifyTransition();
+    } else if (changedMode) startWrapping(now, !state.wrapped);
+    else for (const id of newlyCompleted) startDelivery(id, now);
     if (active) render(performance.now(), false);
   }
 
@@ -599,15 +866,11 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
           }
         }
       }
-      for (const [object, start] of bouquetArrivals) {
-        const t = Math.min(1, (now - start) / 550);
-        object.scale.setScalar(0.88 + 0.12 * (1 - (1 - t) ** 3));
-        if (t >= 1) { object.scale.setScalar(1); bouquetArrivals.delete(object); }
-      }
+      advanceTransitions(now);
       advanceDrag(now);
       for (const ghost of ghostMaterials.values()) ghost.opacity = drag?.ready ? 0.32 : reducedMotion ? 0.19 : 0.19 + Math.sin(now * 0.0027) * 0.018;
-      if (!drag) controls.update(delta);
-      const nextPiece = state.stages[state.active] < 4 && !state.wrapped ? looseFlowers[state.active][state.stages[state.active]] : null;
+      if (!drag && !isBusy()) controls.update(delta);
+      const nextPiece = state.stages[state.active] < partCount(state.active) && !state.wrapped ? looseFlowers[state.active][state.stages[state.active]] : null;
       if (nextPiece) {
         nextPiece.root.updateWorldMatrix(true, false);
         const trayPoint = screenPoint(nextPiece.root.getWorldPosition(new THREE.Vector3()));
@@ -619,6 +882,7 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
       if (schedule) frame = requestAnimationFrame(render);
     } catch (error) {
       active = false;
+      clearTransitions();
       if (!reportedError) { reportedError = true; onError?.(error); }
     }
   }
@@ -630,7 +894,15 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
     if (nextActive === active) return;
     active = nextActive;
     cancelAnimationFrame(frame);
-    controls.enabled = active;
+    const now = performance.now();
+    if (!active && isBusy()) pausedAt = now;
+    if (active && pausedAt !== null) {
+      const pause = now - pausedAt;
+      if (wrapTransition) wrapTransition.start += pause;
+      for (const delivery of deliveries.values()) delivery.start += pause;
+      pausedAt = null;
+    }
+    controls.enabled = active && !isBusy();
     if (active) {
       resize();
       if (!hasFramed) resetView();
@@ -706,7 +978,7 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
     drag = null;
     restorePiece(previous.piece);
     releaseCapture(previous);
-    controls.enabled = active;
+    controls.enabled = active && !isBusy();
     updateSnapMarker();
     notifyDragChange(false);
     return previous;
@@ -715,7 +987,7 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
     endDrag();
   }
   function isCurrentDrag(value = drag) {
-    return Boolean(value && active && !destroyed && !state.wrapped && state.active === value.id && state.stages[value.id] === value.index);
+    return Boolean(value && active && !destroyed && !state.wrapped && state.active === value.id && state.stages[value.id] === value.index && !isBusy());
   }
   function validateDrop(value = drag) {
     if (!value) return false;
@@ -751,9 +1023,9 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
     return true;
   }
   function startDrag(input, event = null, expectedIndex = null) {
-    if (drag || !active || state.wrapped || destroyed) return false;
+    if (drag || !active || state.wrapped || destroyed || isBusy()) return false;
     const index = state.stages[state.active];
-    if (index >= 4 || (expectedIndex !== null && expectedIndex !== index)) return false;
+    if (index >= partCount(state.active) || (expectedIndex !== null && expectedIndex !== index)) return false;
     const piece = looseFlowers[state.active][index];
     scene.updateMatrixWorld(true);
     const target = attachment(piece);
@@ -865,13 +1137,13 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
     return Math.abs(event.clientX - (minX + maxX) / 2) <= halfWidth && Math.abs(event.clientY - (minY + maxY) / 2) <= halfHeight;
   }
   function pointerDown(event) {
-    if (!active || event.button !== 0) return;
+    if (!active || event.button !== 0 || isBusy()) return;
     pointers.add(event.pointerId);
     if (pointers.size > 1) { down = null; cancelDrag(); return; }
     if (event.isPrimary === false) { down = null; return; }
     if (drag) { event.preventDefault(); event.stopImmediatePropagation(); return; }
     const index = state.stages[state.active];
-    const currentPiece = !state.wrapped && index < 4 ? looseFlowers[state.active][index].root : null;
+    const currentPiece = !state.wrapped && index < partCount(state.active) ? looseFlowers[state.active][index].root : null;
     if (currentPiece && canPickPart(currentPiece, event) && startDrag('pointer', event)) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -940,6 +1212,7 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
   resizeObserver.observe(container);
   resize();
   update(state);
+  hasHostState = false;
   controls.enabled = false;
 
   function toggleRotate() {
@@ -952,6 +1225,9 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
     if (destroyed) return;
     cancelDrag();
     setActive(false);
+    deliveries.clear();
+    wrapTransition = null;
+    notifyTransition();
     destroyed = true;
     resizeObserver.disconnect();
     renderer.domElement.removeEventListener('pointerdown', pointerDown, true);
@@ -973,11 +1249,12 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
     snapMarker.remove();
     scene.clear();
     arrivals.clear();
-    bouquetArrivals.clear();
+    deliveries.clear();
   }
 
   return { update, setActive, resetView, toggleRotate, destroy, renderer, scene, camera, controls, handlesSignature: true,
     beginKeyboardDrag, moveKeyboardDrag, finishKeyboardDrag, cancelDrag,
     get dragging() { return Boolean(drag); },
+    get busy() { return isBusy(); },
   };
 }

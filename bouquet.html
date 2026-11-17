@@ -29,10 +29,6 @@
     </div>
     <main class="workshop">
       <header class="topbar">
-        <div class="mode-switch" role="group" aria-label="2D / 3D">
-          <button type="button" data-mode="2d" aria-pressed="true">2D</button>
-          <button type="button" data-mode="3d" aria-pressed="false">3D<span class="loading-dot" aria-hidden="true"></span></button>
-        </div>
         <div class="top-actions">
           <button type="button" class="icon-button" id="undo" aria-label="↶"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4 3 9l5 5M4 9h9a6 6 0 0 1 0 12"/></svg></button>
           <button type="button" class="icon-button" id="sound" aria-label="♪" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Zm5 4a5 5 0 0 1 0 6m3-9a9 9 0 0 1 0 12"/><path class="sound-slash" d="m3 3 18 18"/></svg></button>
@@ -47,20 +43,19 @@
       <section class="desk" aria-labelledby="page-title">
         <div class="desk-oval" aria-hidden="true"></div>
         <div class="progress-thread" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
-        <div id="scene-2d" class="scene"></div>
-        <div id="scene-3d" class="scene" hidden></div>
-        <button type="button" id="place" class="place-button" aria-label="＋" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+        <div id="scene-3d" class="scene" aria-busy="true"></div>
+        <div class="scene-loading" aria-hidden="true"><i></i><i></i><i></i></div>
+        <button type="button" id="retry-view" class="retry-view icon-button" aria-label="3D" hidden>↻</button>
         <div class="camera-tools" hidden>
           <button type="button" id="camera-reset" class="icon-button" aria-label="⤢"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5m6 0h5v5m0 6v5h-5M9 20H4v-5M9 9l6 6m0-6-6 6"/></svg></button>
           <button type="button" id="camera-spin" class="icon-button" aria-label="↻" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 3 4 4-4 4m4-4H9a6 6 0 0 0 0 12h8"/></svg></button>
         </div>
         <div class="gesture-cue" aria-hidden="true" hidden><svg viewBox="0 0 90 30"><path d="m12 15 6-5m-6 5 6 5m-4-5c15-12 47-12 62 0m0 0-6-5m6 5-6 5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></div>
-        <div class="gift-tag" hidden><span id="gift-signature"></span><svg viewBox="0 0 22 20" aria-hidden="true"><path d="M11 18 2 9C-3 1 7-3 11 4c4-7 14-3 9 5Z"/></svg></div>
       </section>
 
       <div id="flower-picker" class="flower-picker" role="group" aria-label="purple tulips / orange calendula"></div>
       <div class="assembly-tools">
-        <div class="parts-tray" id="parts-tray" role="group" aria-label="1 / 2 / 3 / 4"></div>
+        <div class="keyboard-parts" id="parts-tray" role="group" aria-label="1 / 2 / 3 / 4"></div>
         <button type="button" id="next-flower" class="round-action" aria-label="→" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></button>
         <button type="button" id="wrap" class="ribbon-action" aria-label="🎀" hidden><svg viewBox="0 0 64 48" aria-hidden="true"><path d="M28 20C2-4-4 23 8 28c9 4 20-3 20-3m8-5C62-4 68 23 56 28c-9 4-20-3-20-3M29 27 17 44l12-3 3-12m4-2 11 17-12-3-3-12"/><rect x="27" y="17" width="10" height="14" rx="3"/></svg></button>
         <div class="arrange-tools" hidden><button type="button" id="arrange-left" class="icon-button" aria-label="←">←</button><button type="button" id="arrange-right" class="icon-button" aria-label="→">→</button></div>

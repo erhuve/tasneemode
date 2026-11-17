@@ -16,7 +16,7 @@ function invariant(state) {
   assert.ok(state.stages.every(stage => Number.isInteger(stage) && stage >= 0 && stage <= PARTS));
   assert.deepEqual([...state.order].sort(), [0, 1, 2, 3, 4]);
   assert.ok(Number.isInteger(state.active) && state.active >= 0 && state.active < FLOWERS.length);
-  assert.ok(state.mode === '2d' || state.mode === '3d');
+  assert.equal(state.mode, '3d');
   if (state.wrapped) assert.ok(state.stages.every(stage => stage === PARTS));
 }
 
@@ -50,7 +50,7 @@ test('storage errors and malformed data preserve a working fresh experience', ()
   assert.equal(saveState({ setItem() { throw new Error('full'); } }, initialState()), false);
   const entries = new Map();
   const storage = { getItem: key => entries.get(key), setItem: (key, value) => entries.set(key, value) };
-  const progress = transition(completedState(), { type: 'mode', mode: '3d' });
+  const progress = completedState();
   assert.equal(saveState(storage, progress), true);
   assert.ok(entries.has(STORAGE_KEY));
   assert.deepEqual(loadState(storage), progress);
@@ -69,15 +69,24 @@ test('only the active flower gains one piece, without mutating prior progress', 
   assert.equal(transition(initialState(), { type: 'undo' }).stages[0], 0);
 });
 
-test('switching render modes preserves assembly, selection, and arrangement', () => {
+test('legacy 2D saves migrate to 3D without losing any bouquet progress', () => {
+  const legacy = { version: 1, mode: '2d', active: 3, stages: [4, 2, 1, 0, 4], order: [4, 3, 2, 1, 0], wrapped: false };
+  const restored = loadState({ getItem(key) { assert.equal(key, STORAGE_KEY); return JSON.stringify(legacy); } });
+  assert.deepEqual(restored, { ...legacy, mode: '3d' });
+  const finished = transition(completedState(), { type: 'wrap' });
+  const restoredFinished = sanitizeState({ ...finished, mode: '2d' });
+  assert.deepEqual(restoredFinished, finished);
+  assert.equal(restoredFinished.wrapped, true);
+  invariant(restored);
+  invariant(restoredFinished);
+});
+
+test('the 3D-only experience ignores obsolete render-mode actions', () => {
   const state = transition(completedState(), { type: 'wrap' });
-  const switched = transition(state, { type: 'mode', mode: '3d' });
-  assert.equal(switched.mode, '3d');
-  assert.deepEqual(switched.stages, state.stages);
-  assert.deepEqual(switched.order, state.order);
-  assert.equal(switched.active, state.active);
-  assert.equal(switched.wrapped, true);
-  assert.equal(transition(switched, { type: 'mode', mode: 'unknown' }), switched);
+  for (const mode of ['2d', '3d', 'unknown']) {
+    assert.equal(transition(state, { type: 'mode', mode }), state);
+  }
+  assert.equal(initialState().mode, '3d');
 });
 
 test('wrapping requires all flowers; undo unwraps before removing a piece', () => {

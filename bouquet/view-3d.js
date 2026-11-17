@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { canSnapDrop } from './drag-math.js';
 
 /** A procedural, shared-state view. The host owns selection and progression. */
-export function create3DView({ container, onPlace, onSelect, onError } = {}) {
+export function create3DView({ container, onPlace, onSelect, onError, onDragChange } = {}) {
   if (!container) throw new Error('A container is required for the bouquet view.');
 
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -40,6 +41,7 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
   const materials = new Set();
   const ghostMaterials = new Map();
   const futureMaterials = new Map();
+  const lockedMaterials = new Map();
   const keepGeometry = geometry => (geometries.add(geometry), geometry);
   const material = (color, options = {}) => {
     const value = new THREE.MeshStandardMaterial({ color, roughness: 0.47, metalness: 0.015, ...options });
@@ -266,6 +268,59 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
     return flower;
   });
 
+  // Loose components are the actual flower meshes, centered in four physical
+  // tray wells. Their final transform is exactly the corresponding stage's.
+  const trayRoot = new THREE.Group();
+  trayRoot.name = 'bouquet-component-tray';
+  scene.add(trayRoot);
+  const trayShape = new THREE.Shape();
+  const trayWidth = 3.85, trayDepth = 1.05, trayRadius = 0.18;
+  trayShape.moveTo(-trayWidth / 2 + trayRadius, -trayDepth / 2);
+  trayShape.lineTo(trayWidth / 2 - trayRadius, -trayDepth / 2);
+  trayShape.quadraticCurveTo(trayWidth / 2, -trayDepth / 2, trayWidth / 2, -trayDepth / 2 + trayRadius);
+  trayShape.lineTo(trayWidth / 2, trayDepth / 2 - trayRadius);
+  trayShape.quadraticCurveTo(trayWidth / 2, trayDepth / 2, trayWidth / 2 - trayRadius, trayDepth / 2);
+  trayShape.lineTo(-trayWidth / 2 + trayRadius, trayDepth / 2);
+  trayShape.quadraticCurveTo(-trayWidth / 2, trayDepth / 2, -trayWidth / 2, trayDepth / 2 - trayRadius);
+  trayShape.lineTo(-trayWidth / 2, -trayDepth / 2 + trayRadius);
+  trayShape.quadraticCurveTo(-trayWidth / 2, -trayDepth / 2, -trayWidth / 2 + trayRadius, -trayDepth / 2);
+  const trayBoard = mesh(keepGeometry(new THREE.ExtrudeGeometry(trayShape, { depth: 0.055, bevelEnabled: true, bevelSegments: 3, bevelSize: 0.045, bevelThickness: 0.035, steps: 1, curveSegments: 8 })), colors.board, trayRoot, [0, 0.035, 1.22]);
+  trayBoard.rotation.x = -Math.PI / 2;
+  const wellMaterial = material('#ddd0c5', { roughness: 0.72 });
+  for (let index = 0; index < 4; index++) {
+    mesh(cylinder, wellMaterial, trayRoot, [(index - 1.5) * 0.92, 0.115, 1.22], [0.40, 0.018, 0.40]);
+  }
+  const pickupHalo = mesh(torus, material('#ad8ac2', { roughness: 0.36 }), trayRoot, [0, 0.15, 1.22], [0.405, 0.405, 0.405]);
+  pickupHalo.rotation.x = Math.PI / 2;
+  const looseFlowers = activeFlowers.map(({ stages }, id) => stages.map((source, index) => {
+    const content = source.clone(true);
+    content.position.set(0, 0, 0);
+    content.rotation.set(0, 0, 0);
+    content.scale.setScalar(1);
+    content.traverse(object => {
+      if (object.isMesh) object.userData.solidMaterial = object.material;
+    });
+    content.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(content);
+    const center = bounds.getCenter(new THREE.Vector3());
+    const size = bounds.getSize(new THREE.Vector3());
+    content.position.sub(center);
+    const piece = new THREE.Group();
+    piece.name = `bouquet-part-${id}-${index}`;
+    piece.add(content);
+    const scale = Math.min(0.82 / Math.max(size.x, size.y, size.z), 0.83);
+    const restQuaternion = source.quaternion.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, (index - 1.5) * 0.07, (index % 2 ? 1 : -1) * 0.035)));
+    piece.quaternion.copy(restQuaternion);
+    piece.scale.setScalar(scale);
+    piece.updateMatrixWorld(true);
+    const restingBounds = new THREE.Box3().setFromObject(piece);
+    const restPosition = new THREE.Vector3((index - 1.5) * 0.92, 0.17 - restingBounds.min.y, 1.22);
+    piece.position.copy(restPosition);
+    piece.userData.part = index;
+    trayRoot.add(piece);
+    return { root: piece, content, center, restPosition, restQuaternion, restScale: scale, id, index };
+  }));
+
   const wrapping = new THREE.Group();
   bouquetRoot.add(wrapping);
   const wrapperGeometry = thickSurface((u, v) => {
@@ -365,9 +420,20 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
   let hasFramed = false;
   let fittedDistance = 0;
   let reportedError = false;
+  let drag = null;
   const arrivals = new Map();
   const bouquetArrivals = new Map();
-  const pickRoots = [...activeFlowers.map(f => f.root), ...bouquetFlowers.map(f => f.root)];
+  const pickRoots = bouquetFlowers.map(f => f.root);
+  const snapMarker = document.createElement('div');
+  snapMarker.className = 'snap-target';
+  snapMarker.setAttribute('aria-hidden', 'true');
+  snapMarker.hidden = true;
+  snapMarker.style.position = 'absolute';
+  snapMarker.style.pointerEvents = 'none';
+  snapMarker.style.transform = 'translate(-50%, -50%)';
+  container.appendChild(snapMarker);
+  container.dataset.dragging = 'false';
+  container.dataset.snapReady = 'false';
 
   function setStage(stage, mode) {
     stage.visible = mode !== 'hidden';
@@ -375,25 +441,29 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
     stage.traverse(object => {
       if (!object.isMesh) return;
       const original = object.userData.solidMaterial;
-      if (mode !== 'ghost' && mode !== 'future') object.material = original;
+      if (mode !== 'ghost' && mode !== 'future' && mode !== 'locked') object.material = original;
       else {
-        const cache = mode === 'ghost' ? ghostMaterials : futureMaterials;
+        const cache = mode === 'ghost' ? ghostMaterials : mode === 'locked' ? lockedMaterials : futureMaterials;
         if (!cache.has(original)) {
           const ghost = original.clone();
           ghost.transparent = true;
-          ghost.opacity = mode === 'ghost' ? 0.19 : 0.065;
+          ghost.opacity = mode === 'ghost' ? 0.19 : mode === 'locked' ? 0.25 : 0.065;
+          if (mode === 'locked') ghost.color.lerp(new THREE.Color('#d4c8be'), 0.55);
           ghost.depthWrite = false;
           materials.add(ghost);
           cache.set(original, ghost);
         }
         object.material = cache.get(original);
       }
-      object.castShadow = mode !== 'ghost' && mode !== 'future';
+      object.castShadow = mode !== 'ghost' && mode !== 'future' && mode !== 'locked';
     });
   }
 
   function layout() {
     workRoot.visible = !state.wrapped;
+    trayRoot.visible = !state.wrapped;
+    pickupHalo.visible = !state.wrapped && state.stages[state.active] < 4;
+    pickupHalo.position.x = (state.stages[state.active] - 1.5) * 0.92;
     workRoot.position.x = portrait ? 0.68 : 0.95;
     pot.visible = !state.wrapped;
     wrapping.visible = state.wrapped;
@@ -414,8 +484,8 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
 
   function framingDistance() {
     const aspect = width / Math.max(height, 1) || 1;
-    const visualHeight = state.wrapped ? 4.15 : 3.95;
-    const visualWidth = state.wrapped ? 3.45 : (portrait ? 3.95 : 4.85);
+    const visualHeight = state.wrapped ? 4.15 : 4.25;
+    const visualWidth = state.wrapped ? 3.45 : (portrait ? 4.25 : 5.05);
     const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
     return Math.max(visualHeight / (2 * Math.tan(halfFov)), visualWidth / (2 * Math.tan(halfFov) * aspect));
   }
@@ -427,9 +497,10 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
 
   function resetView() {
     if (destroyed) return;
-    const target = new THREE.Vector3(state.wrapped ? 0 : (portrait ? 0.10 : -0.12), state.wrapped ? 1.85 : 1.61, 0);
+    cancelDrag();
+    const target = new THREE.Vector3(state.wrapped ? 0 : (portrait ? 0.10 : -0.12), state.wrapped ? 1.85 : 1.53, state.wrapped ? 0 : 0.35);
     const distance = framingDistance();
-    const direction = new THREE.Vector3(0.28, 0.23, 1).normalize();
+    const direction = new THREE.Vector3(0.22, state.wrapped ? 0.23 : 0.31, 1).normalize();
     camera.position.copy(target).addScaledVector(direction, distance);
     controls.target.copy(target);
     cameraLimits(distance);
@@ -445,6 +516,7 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
     const nextHeight = container.clientHeight;
     if (nextWidth <= 0 || nextHeight <= 0) return;
     if (nextWidth === width && nextHeight === height) return;
+    cancelDrag();
     const oldPortrait = portrait;
     width = nextWidth;
     height = nextHeight;
@@ -476,6 +548,7 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
   function update(value) {
     if (destroyed) return;
     const next = sanitizeState(value);
+    if (drag && (next.active !== drag.id || next.stages[drag.id] !== drag.index || next.wrapped)) cancelDrag();
     const changedMode = state.wrapped !== next.wrapped;
     const now = performance.now();
     for (let id = 0; id < 5; id++) {
@@ -486,6 +559,9 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
         const stage = activeFlowers[id].stages[stageIndex];
         setStage(stage, stageIndex < count ? 'solid' : stageIndex === count ? 'ghost' : 'future');
         setStage(bouquetFlowers[id].stages[stageIndex], 'solid');
+        const loose = looseFlowers[id][stageIndex];
+        loose.root.visible = id === next.active && !next.wrapped && stageIndex >= count;
+        setStage(loose.content, stageIndex === count ? 'solid' : 'locked');
         if (!reducedMotion && count > previousCount && stageIndex >= previousCount && stageIndex < count) arrivals.set(stage, now);
         if (stageIndex >= count) arrivals.delete(stage);
       }
@@ -493,6 +569,7 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
       if (!reducedMotion && count === 4 && previousCount < 4) bouquetArrivals.set(bouquetFlowers[id].root, now);
     }
     state = next;
+    container.dataset.part = String(state.stages[state.active]);
     setSignature(state.signature);
     layout();
     if (changedMode) resetView();
@@ -527,8 +604,17 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
         object.scale.setScalar(0.88 + 0.12 * (1 - (1 - t) ** 3));
         if (t >= 1) { object.scale.setScalar(1); bouquetArrivals.delete(object); }
       }
-      for (const ghost of ghostMaterials.values()) ghost.opacity = reducedMotion ? 0.19 : 0.19 + Math.sin(now * 0.0027) * 0.018;
-      controls.update(delta);
+      advanceDrag(now);
+      for (const ghost of ghostMaterials.values()) ghost.opacity = drag?.ready ? 0.32 : reducedMotion ? 0.19 : 0.19 + Math.sin(now * 0.0027) * 0.018;
+      if (!drag) controls.update(delta);
+      const nextPiece = state.stages[state.active] < 4 && !state.wrapped ? looseFlowers[state.active][state.stages[state.active]] : null;
+      if (nextPiece) {
+        nextPiece.root.updateWorldMatrix(true, false);
+        const trayPoint = screenPoint(nextPiece.root.getWorldPosition(new THREE.Vector3()));
+        container.dataset.trayX = String(Math.round(trayPoint.x * 100) / 100);
+        container.dataset.trayY = String(Math.round(trayPoint.y * 100) / 100);
+      } else { delete container.dataset.trayX; delete container.dataset.trayY; }
+      updateSnapMarker();
       renderer.render(scene, camera);
       if (schedule) frame = requestAnimationFrame(render);
     } catch (error) {
@@ -540,6 +626,7 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
   function setActive(value) {
     if (destroyed) return;
     const nextActive = Boolean(value);
+    if (!nextActive) cancelDrag();
     if (nextActive === active) return;
     active = nextActive;
     cancelAnimationFrame(frame);
@@ -556,48 +643,299 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
   const pointer = new THREE.Vector2();
   const pointers = new Set();
   let down = null;
-  let wasGesture = false;
+  function setRay(clientX, clientY) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.set((clientX - rect.left) / rect.width * 2 - 1, -(clientY - rect.top) / rect.height * 2 + 1);
+    camera.updateMatrixWorld(true);
+    raycaster.setFromCamera(pointer, camera);
+    return rect;
+  }
+  function screenPoint(world) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const point = world.clone().project(camera);
+    return { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2, z: point.z };
+  }
+  function attachment(piece) {
+    const source = activeFlowers[piece.id].stages[piece.index];
+    source.updateWorldMatrix(true, false);
+    return {
+      position: source.localToWorld(piece.center.clone()),
+      quaternion: source.getWorldQuaternion(new THREE.Quaternion()),
+    };
+  }
+  function notifyDragChange(value) {
+    container.dataset.dragging = String(value);
+    onDragChange?.(value);
+  }
+  function updateSnapMarker() {
+    if (!drag) {
+      snapMarker.hidden = true;
+      snapMarker.classList.remove('is-ready');
+      container.dataset.snapReady = 'false';
+      delete container.dataset.snapX;
+      delete container.dataset.snapY;
+      return;
+    }
+    const target = screenPoint(drag.targetWorld);
+    const rect = renderer.domElement.getBoundingClientRect();
+    const visible = target.z >= -1 && target.z <= 1 && target.x >= rect.left && target.x <= rect.right && target.y >= rect.top && target.y <= rect.bottom;
+    snapMarker.hidden = !visible;
+    snapMarker.style.left = `${target.x - rect.left}px`;
+    snapMarker.style.top = `${target.y - rect.top}px`;
+    snapMarker.classList.toggle('is-ready', drag.ready);
+    container.dataset.snapReady = String(drag.ready);
+    container.dataset.snapX = String(Math.round(target.x * 100) / 100);
+    container.dataset.snapY = String(Math.round(target.y * 100) / 100);
+  }
+  function restorePiece(piece) {
+    piece.root.position.copy(piece.restPosition);
+    piece.root.quaternion.copy(piece.restQuaternion);
+    piece.root.scale.setScalar(piece.restScale);
+  }
+  function releaseCapture(previous) {
+    const id = previous.pointerId;
+    previous.pointerId = null;
+    if (id !== null && id !== undefined && renderer.domElement.hasPointerCapture(id)) {
+      try { renderer.domElement.releasePointerCapture(id); } catch { /* The browser may have released it already. */ }
+    }
+    pointers.delete(id);
+  }
+  function endDrag() {
+    if (!drag) return null;
+    const previous = drag;
+    drag = null;
+    restorePiece(previous.piece);
+    releaseCapture(previous);
+    controls.enabled = active;
+    updateSnapMarker();
+    notifyDragChange(false);
+    return previous;
+  }
+  function cancelDrag() {
+    endDrag();
+  }
+  function isCurrentDrag(value = drag) {
+    return Boolean(value && active && !destroyed && !state.wrapped && state.active === value.id && state.stages[value.id] === value.index);
+  }
+  function validateDrop(value = drag) {
+    if (!value) return false;
+    const rect = renderer.domElement.getBoundingClientRect();
+    const targetScreen = screenPoint(value.targetWorld);
+    const forward = camera.getWorldDirection(new THREE.Vector3());
+    const depth = value.targetWorld.clone().sub(camera.position).dot(forward);
+    const worldPerPixel = 2 * depth * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / rect.height;
+    const inside = point => point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
+    const valid = isCurrentDrag(value) && depth > camera.near && depth < camera.far && targetScreen.z >= -1 && targetScreen.z <= 1 && inside(targetScreen) && inside(value.screen) && inside(value.pointerScreen);
+    return canSnapDrop({
+      pieceScreen: value.screen, targetScreen,
+      pieceWorld: value.rawPosition, targetWorld: value.targetWorld,
+      screenRadius: value.radius, worldRadius: worldPerPixel * value.radius * 1.2,
+      moved: value.maxTravel >= value.movementThreshold, valid,
+    });
+  }
+  function moveDrag(clientX, clientY) {
+    if (!drag || (drag.phase !== 'pointer' && drag.phase !== 'keyboard')) return false;
+    const value = drag;
+    value.pointerScreen = { x: clientX, y: clientY };
+    value.screen = { x: clientX + value.grabOffset.x, y: clientY + value.grabOffset.y };
+    value.maxTravel = Math.max(value.maxTravel, Math.hypot(clientX - value.startScreen.x, clientY - value.startScreen.y));
+    setRay(value.screen.x, value.screen.y);
+    const position = raycaster.ray.intersectPlane(value.plane, new THREE.Vector3());
+    if (!position || !Number.isFinite(position.x + position.y + position.z)) { value.ready = false; return false; }
+    value.rawPosition.copy(position);
+    const target = attachment(value.piece);
+    value.targetWorld.copy(target.position);
+    value.targetQuaternion.copy(target.quaternion);
+    value.ready = validateDrop(value);
+    updateSnapMarker();
+    return true;
+  }
+  function startDrag(input, event = null, expectedIndex = null) {
+    if (drag || !active || state.wrapped || destroyed) return false;
+    const index = state.stages[state.active];
+    if (index >= 4 || (expectedIndex !== null && expectedIndex !== index)) return false;
+    const piece = looseFlowers[state.active][index];
+    scene.updateMatrixWorld(true);
+    const target = attachment(piece);
+    const initial = screenPoint(piece.root.getWorldPosition(new THREE.Vector3()));
+    const pointerScreen = event ? { x: event.clientX, y: event.clientY } : { x: initial.x, y: initial.y };
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), target.position);
+    const value = {
+      piece, id: state.active, index, phase: input, pointerId: event?.pointerId ?? null,
+      radius: event?.pointerType === 'touch' ? 84 : 72,
+      movementThreshold: event?.pointerType === 'touch' ? 10 : 6,
+      plane, targetWorld: target.position, targetQuaternion: target.quaternion,
+      rawPosition: piece.root.position.clone(), screen: { x: initial.x, y: initial.y }, pointerScreen,
+      startScreen: { ...pointerScreen }, grabOffset: { x: initial.x - pointerScreen.x, y: initial.y - pointerScreen.y },
+      maxTravel: 0, ready: false, pickupStarted: performance.now(),
+    };
+    drag = value;
+    controls.enabled = false;
+    down = null;
+    if (event) renderer.domElement.setPointerCapture(event.pointerId);
+    moveDrag(pointerScreen.x, pointerScreen.y);
+    piece.root.position.copy(value.rawPosition);
+    container.dataset.part = String(index);
+    notifyDragChange(true);
+    return true;
+  }
+  function finishDrag() {
+    if (!drag || (drag.phase !== 'pointer' && drag.phase !== 'keyboard')) return false;
+    const value = drag;
+    value.ready = validateDrop(value);
+    value.phase = value.ready ? 'snapping' : 'returning';
+    value.animationStarted = performance.now();
+    value.fromPosition = value.piece.root.position.clone();
+    value.fromQuaternion = value.piece.root.quaternion.clone();
+    value.fromScale = value.piece.root.scale.x;
+    releaseCapture(value);
+    updateSnapMarker();
+    return value.ready;
+  }
+  function advanceDrag(now) {
+    if (!drag) return;
+    if (!isCurrentDrag()) { cancelDrag(); return; }
+    const value = drag;
+    const object = value.piece.root;
+    if (value.phase === 'pointer' || value.phase === 'keyboard') {
+      const target = attachment(value.piece);
+      value.targetWorld.copy(target.position);
+      value.targetQuaternion.copy(target.quaternion);
+      value.ready = validateDrop(value);
+      const targetScreen = screenPoint(value.targetWorld);
+      const distance = Math.hypot(value.screen.x - targetScreen.x, value.screen.y - targetScreen.y);
+      const attraction = value.ready ? 0.20 + 0.58 * (1 - Math.min(1, distance / value.radius)) ** 2 : 0;
+      object.position.copy(value.rawPosition).lerp(value.targetWorld, attraction);
+      object.quaternion.copy(value.piece.restQuaternion).slerp(value.targetQuaternion, value.ready ? 0.9 : 0.2);
+      const lift = reducedMotion ? 1 : Math.min(1, (now - value.pickupStarted) / 170);
+      object.scale.setScalar(THREE.MathUtils.lerp(value.piece.restScale, value.ready ? 1 : 0.91, 1 - (1 - lift) ** 3));
+      return;
+    }
+    const snapping = value.phase === 'snapping';
+    const duration = reducedMotion ? 1 : snapping ? 230 : 260;
+    const t = Math.min(1, (now - value.animationStarted) / duration);
+    const eased = 1 - (1 - t) ** 3;
+    object.position.copy(value.fromPosition).lerp(snapping ? value.targetWorld : value.piece.restPosition, eased);
+    object.quaternion.copy(value.fromQuaternion).slerp(snapping ? value.targetQuaternion : value.piece.restQuaternion, eased);
+    object.scale.setScalar(THREE.MathUtils.lerp(value.fromScale, snapping ? 1 : value.piece.restScale, eased));
+    if (t >= 1) {
+      const completed = endDrag();
+      if (snapping && completed && isCurrentDrag(completed)) onPlace?.(completed.id, completed.index);
+    }
+  }
+  function beginKeyboardDrag(index = null) { return startDrag('keyboard', null, index); }
+  function moveKeyboardDrag(dx, dy) {
+    if (!drag || drag.phase !== 'keyboard' || !Number.isFinite(dx) || !Number.isFinite(dy)) return false;
+    return moveDrag(drag.pointerScreen.x + dx, drag.pointerScreen.y + dy);
+  }
+  function finishKeyboardDrag() {
+    if (!drag || drag.phase !== 'keyboard') return false;
+    return finishDrag();
+  }
+  function visibleHit(roots, clientX, clientY) {
+    setRay(clientX, clientY);
+    scene.updateMatrixWorld(true);
+    for (const hit of raycaster.intersectObjects(roots, true)) {
+      let node = hit.object;
+      let visible = true;
+      while (node) { if (!node.visible) visible = false; node = node.parent; }
+      if (visible) return hit;
+    }
+    return null;
+  }
+  function canPickPart(piece, event) {
+    if (visibleHit([piece], event.clientX, event.clientY)) return true;
+    // A thin stem still has a generous touch target. This affects pickup only;
+    // attachment always uses the stricter, matching-anchor drop validation.
+    const bounds = new THREE.Box3().setFromObject(piece);
+    const points = [];
+    for (const x of [bounds.min.x, bounds.max.x]) {
+      for (const y of [bounds.min.y, bounds.max.y]) {
+        for (const z of [bounds.min.z, bounds.max.z]) points.push(screenPoint(new THREE.Vector3(x, y, z)));
+      }
+    }
+    if (points.some(point => !Number.isFinite(point.x + point.y + point.z) || point.z < -1 || point.z > 1)) return false;
+    const minX = Math.min(...points.map(point => point.x));
+    const maxX = Math.max(...points.map(point => point.x));
+    const minY = Math.min(...points.map(point => point.y));
+    const maxY = Math.max(...points.map(point => point.y));
+    const padding = event.pointerType === 'touch' ? 22 : 12;
+    const halfWidth = Math.max(22, (maxX - minX) / 2 + padding);
+    const halfHeight = Math.max(22, (maxY - minY) / 2 + padding);
+    return Math.abs(event.clientX - (minX + maxX) / 2) <= halfWidth && Math.abs(event.clientY - (minY + maxY) / 2) <= halfHeight;
+  }
   function pointerDown(event) {
+    if (!active || event.button !== 0) return;
     pointers.add(event.pointerId);
-    if (pointers.size > 1) wasGesture = true;
-    if (pointers.size === 1) { down = { x: event.clientX, y: event.clientY, id: event.pointerId }; wasGesture = false; }
+    if (pointers.size > 1) { down = null; cancelDrag(); return; }
+    if (event.isPrimary === false) { down = null; return; }
+    if (drag) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+    const index = state.stages[state.active];
+    const currentPiece = !state.wrapped && index < 4 ? looseFlowers[state.active][index].root : null;
+    if (currentPiece && canPickPart(currentPiece, event) && startDrag('pointer', event)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    down = { x: event.clientX, y: event.clientY, id: event.pointerId, maxTravel: 0 };
+  }
+  function pointerMove(event) {
+    if (down?.id === event.pointerId) down.maxTravel = Math.max(down.maxTravel, Math.hypot(event.clientX - down.x, event.clientY - down.y));
+    if (drag?.phase === 'pointer' && drag.pointerId === event.pointerId) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      moveDrag(event.clientX, event.clientY);
+    }
   }
   function pointerUp(event) {
+    if (drag?.phase === 'pointer' && drag.pointerId === event.pointerId) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      moveDrag(event.clientX, event.clientY);
+      finishDrag();
+      pointers.delete(event.pointerId);
+      down = null;
+      return;
+    }
     const originalDown = down;
-    const isClick = active && originalDown?.id === event.pointerId && !wasGesture && Math.hypot(event.clientX - originalDown.x, event.clientY - originalDown.y) < 8;
+    const isClick = active && !drag && originalDown?.id === event.pointerId && originalDown.maxTravel < 8 && Math.hypot(event.clientX - originalDown.x, event.clientY - originalDown.y) < 8;
     pointers.delete(event.pointerId);
     if (!pointers.size) down = null;
     if (!isClick) return;
-    const rect = renderer.domElement.getBoundingClientRect();
-    pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1);
-    scene.updateMatrixWorld(true);
-    raycaster.setFromCamera(pointer, camera);
-    const hits = raycaster.intersectObjects(pickRoots, true);
-    for (const hit of hits) {
-      let current = hit.object;
-      let action = null;
-      let visible = true;
-      while (current) {
-        if (!current.visible) visible = false;
-        if (current.userData.action) action = current.userData.action;
-        current = current.parent;
-      }
-      if (!visible || !action) continue;
-      if (action.kind === 'place' && !state.wrapped) onPlace?.(action.id);
-      else if (action.kind === 'select') onSelect?.(action.id);
-      break;
-    }
+    const hit = visibleHit(pickRoots, event.clientX, event.clientY);
+    let current = hit?.object;
+    while (current && !current.userData.action) current = current.parent;
+    if (current?.userData.action?.kind === 'select') onSelect?.(current.userData.action.id);
   }
-  function pointerCancel(event) { pointers.delete(event.pointerId); if (!pointers.size) down = null; }
+  function pointerCancel(event) {
+    if (drag?.pointerId === event.pointerId) cancelDrag();
+    pointers.delete(event.pointerId);
+    if (!pointers.size) down = null;
+  }
+  function lostCapture(event) {
+    if (drag?.phase === 'pointer' && drag.pointerId === event.pointerId) cancelDrag();
+    pointers.delete(event.pointerId);
+    if (down?.id === event.pointerId) down = null;
+  }
+  function otherPointerDown(event) {
+    if (drag && event.pointerId !== drag.pointerId) cancelDrag();
+  }
+  function blur() { cancelDrag(); pointers.clear(); down = null; }
+  function visibilityChange() { if (document.hidden) blur(); }
   function contextLost(event) {
     event.preventDefault();
     setActive(false);
     if (!reportedError) { reportedError = true; onError?.(new Error('The three dimensional view lost its graphics context.')); }
   }
-  renderer.domElement.addEventListener('pointerdown', pointerDown);
-  renderer.domElement.addEventListener('pointerup', pointerUp);
-  renderer.domElement.addEventListener('pointercancel', pointerCancel);
+  renderer.domElement.addEventListener('pointerdown', pointerDown, true);
+  renderer.domElement.addEventListener('pointermove', pointerMove, true);
+  renderer.domElement.addEventListener('pointerup', pointerUp, true);
+  renderer.domElement.addEventListener('pointercancel', pointerCancel, true);
+  renderer.domElement.addEventListener('lostpointercapture', lostCapture);
   renderer.domElement.addEventListener('webglcontextlost', contextLost);
+  window.addEventListener('pointerdown', otherPointerDown, true);
+  window.addEventListener('blur', blur);
+  document.addEventListener('visibilitychange', visibilityChange);
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(container);
   resize();
@@ -605,19 +943,26 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
   controls.enabled = false;
 
   function toggleRotate() {
+    cancelDrag();
     controls.autoRotate = !controls.autoRotate;
     return controls.autoRotate;
   }
 
   function destroy() {
     if (destroyed) return;
+    cancelDrag();
     setActive(false);
     destroyed = true;
     resizeObserver.disconnect();
-    renderer.domElement.removeEventListener('pointerdown', pointerDown);
-    renderer.domElement.removeEventListener('pointerup', pointerUp);
-    renderer.domElement.removeEventListener('pointercancel', pointerCancel);
+    renderer.domElement.removeEventListener('pointerdown', pointerDown, true);
+    renderer.domElement.removeEventListener('pointermove', pointerMove, true);
+    renderer.domElement.removeEventListener('pointerup', pointerUp, true);
+    renderer.domElement.removeEventListener('pointercancel', pointerCancel, true);
+    renderer.domElement.removeEventListener('lostpointercapture', lostCapture);
     renderer.domElement.removeEventListener('webglcontextlost', contextLost);
+    window.removeEventListener('pointerdown', otherPointerDown, true);
+    window.removeEventListener('blur', blur);
+    document.removeEventListener('visibilitychange', visibilityChange);
     controls.dispose();
     scene.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
     for (const geometry of geometries) geometry.dispose();
@@ -625,10 +970,14 @@ export function create3DView({ container, onPlace, onSelect, onError } = {}) {
     signatureTexture?.dispose();
     renderer.dispose();
     renderer.domElement.remove();
+    snapMarker.remove();
     scene.clear();
     arrivals.clear();
     bouquetArrivals.clear();
   }
 
-  return { update, setActive, resetView, toggleRotate, destroy, renderer, scene, camera, controls, handlesSignature: true };
+  return { update, setActive, resetView, toggleRotate, destroy, renderer, scene, camera, controls, handlesSignature: true,
+    beginKeyboardDrag, moveKeyboardDrag, finishKeyboardDrag, cancelDrag,
+    get dragging() { return Boolean(drag); },
+  };
 }

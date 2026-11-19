@@ -678,7 +678,7 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
     notifyTransition('delivery');
   }
   function cameraPose(wrapped = state.wrapped) {
-    const target = new THREE.Vector3(wrapped ? 0 : (portrait ? 0.10 : -0.12), wrapped ? 1.70 : 1.53, wrapped ? 0 : 0.35);
+    const target = new THREE.Vector3(wrapped ? 0 : (portrait ? 0.10 : -0.12), wrapped ? 1.70 : 1.35, wrapped ? 0 : 0.35);
     const distance = framingDistance(wrapped);
     const direction = new THREE.Vector3(0.22, wrapped ? 0.23 : 0.31, 1).normalize();
     return { target, position: target.clone().addScaledVector(direction, distance), distance };
@@ -734,8 +734,10 @@ export function create3DView({ container, onPlace, onSelect, onError, onDragChan
 
   function framingDistance(wrapped = state.wrapped) {
     const aspect = width / Math.max(height, 1) || 1;
-    const visualHeight = wrapped ? 4.25 : 4.25;
-    const visualWidth = wrapped ? 3.75 : (portrait ? 4.25 : 5.05);
+    // The forward tray edge is closer to the camera than the flower. Leave
+    // room for its perspective expansion and the completed stems at the side.
+    const visualHeight = wrapped ? 4.25 : 4.75;
+    const visualWidth = wrapped ? 3.75 : (portrait ? 5.15 : 5.05);
     const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
     return Math.max(visualHeight / (2 * Math.tan(halfFov)), visualWidth / (2 * Math.tan(halfFov) * aspect));
   }
